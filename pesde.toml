@@ -1,0 +1,15 @@
+name = "emdomanus/anim_mixer"
+version = "0.1.0"
+description = "Generic category-based Roblox AnimationTrack mixer."
+license = "MIT"
+authors = ["emdomanus"]
+private = true
+includes = ["pesde.toml", "LICENSE", "README.md", "CHANGELOG.md", "src/**/*.luau"]
+
+[target]
+environment = "roblox"
+lib = "src/init.luau"
+build_files = ["src"]
+
+[indices]
+default = "https://github.com/pesde-pkg/index"
