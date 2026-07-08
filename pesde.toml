@@ -3,6 +3,7 @@ version = "0.1.0"
 description = "Typed Roblox animation controller with authored layers, motion nodes, and backend abstraction."
 license = "MIT"
 authors = ["emdomanus"]
+repository = "https://github.com/emdomanus/animGraph"
 private = true
 includes = ["pesde.toml", "LICENSE", "README.md", "CHANGELOG.md", "src/**/*.luau"]
 

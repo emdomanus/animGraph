@@ -3,6 +3,8 @@
 animGraph is a Roblox/pesde animation controller package built around typed
 logical layers, motion nodes, and backend-neutral clip requests.
 
+Docs: https://emdomanus.github.io/animGraph/
+
 The current implementation provides the authored controller slice:
 
 - typed `AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>`;
