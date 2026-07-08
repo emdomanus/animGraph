@@ -1,5 +1,5 @@
 {
-  "name": "animMixer",
+  "name": "animGraph",
   "tree": {
     "$path": "src"
   }

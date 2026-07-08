@@ -2,11 +2,18 @@
 
 ## 0.1.0
 
-- Added the initial `animMixer` package.
-- Added raw asset-id animation refs, required ref-to-asset-id resolution,
-  category/layer playback, pushed overrides, crossfade, speed modifiers, and
-  category query primitives.
-- Moved runtime/private types into dedicated type modules and exposed the
-  `AnimMixer` / `AnimMixerImpl` type split.
-- Added `AnimPlayback` for one-ref track ownership and `StackModifier` for
-  deterministic `"set"`, `"add"`, and `"multiply"` speed modifier stacks.
+- Replaced the category mixer API with the first `AnimationController` vertical
+  slice.
+- Added typed logical layers, clip motion nodes, controller parameters, debug
+  snapshots, and a Roblox `Animator` backend.
+- Added `Blend1DNode`, `Blend2DNode`, transition runtime, authored
+  state-machine runtime, and controller event dispatch.
+- Added runtime setters/getters for layer logical priority and explicit Roblox
+  priority overrides.
+- Added backend-neutral clip request contracts so a future Crunchyroll/custom
+  solver backend can share the public controller API.
+- Kept `StackModifier` as a shared component for future speed/weight modifier
+  stacks.
+- Added an interactive Rojo dev harness for spawning a local R6 dummy and testing
+  blend parameters, state-machine triggers, event logs, weights, priority
+  mapping, and debug snapshots.

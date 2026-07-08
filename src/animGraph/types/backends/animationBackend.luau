@@ -1,0 +1,51 @@
+--!strict
+--!optimize 2
+--!native
+
+local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
+
+export type PerJointFallbackMode = "full" | "priorityTier" | "none"
+
+export type BackendCapabilities = {
+	unlimitedPriority: boolean,
+	perJointFallback: PerJointFallbackMode,
+	customMasks: boolean,
+}
+
+export type BackendDebugTrack = {
+	trackKey: string,
+	layer: any,
+	state: any?,
+	clip: any,
+	weight: number,
+	speed: number,
+	logicalPriority: number,
+	isPlaying: boolean,
+	details: { [string]: any }?,
+}
+
+export type BackendDebugSnapshot = {
+	name: string,
+	capabilities: BackendCapabilities,
+	tracks: { BackendDebugTrack },
+	warnings: { string },
+}
+
+export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
+	apply: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> },
+		dt: number
+	) -> (),
+	stopLayer: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		layer: LayerT,
+		fadeTime: number?
+	) -> (),
+	clear: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> (),
+	destroy: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> (),
+	getCapabilities: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> BackendCapabilities,
+	getDebugSnapshot: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> BackendDebugSnapshot,
+}
+
+return {}

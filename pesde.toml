@@ -1,6 +1,6 @@
-name = "emdomanus/anim_mixer"
+name = "emdomanus/anim_graph"
 version = "0.1.0"
-description = "Generic category-based Roblox AnimationTrack mixer."
+description = "Typed Roblox animation controller with authored layers, motion nodes, and backend abstraction."
 license = "MIT"
 authors = ["emdomanus"]
 private = true
