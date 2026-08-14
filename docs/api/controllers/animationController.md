@@ -48,6 +48,7 @@ end)
 - `addLayer(definition)`
 - `hasLayer(layer)`
 - `play(layer, motion, options?)`
+- `setTrackPosition(trackKey, position) -> boolean`
 - `stopLayer(layer, fadeTime?)`
 - `setLayerWeight` / `getLayerWeight`
 - `setLayerSpeed` / `getLayerSpeed`
@@ -63,3 +64,28 @@ end)
 `LayerPlayOptions.initialPosition` and `forceRestart` are one-shot request
 commands consumed after the play first emits requests. `logicalTimeReader`
 persists for the whole active play.
+
+## Live Position and Completion
+
+`setTrackPosition(trackKey, position)` validates the same `AnimationPosition`
+union used by initial placement, then addresses only the currently live backend
+generation. It returns `true` when the valid command is accepted, including
+when positive track length is still pending, and `false` for an unknown,
+retiring, completed, or destroyed key. It does not change logical reader
+baselines, replay graph history, replace the generation, or emit graph state
+transitions.
+
+Subscribe with `controller:on("trackCompleted", callback)`. The event is:
+
+```luau
+{
+	name = "trackCompleted",
+	trackKey = trackKey,
+	layer = layer,
+	state = state,
+}
+```
+
+The controller binds the backend completion port exactly once and forwards it
+through its snapshot-dispatched event bus. Destroying the controller releases
+that binding before backend teardown.

@@ -2,24 +2,51 @@
 --!optimize 2
 --!native
 
-export type Release = () -> ()
+local DefTypes = require(script.Parent.Parent.def)
+
+export type Release = DefTypes.Release
 
 export type AnimationEventName =
 	"stateEntered"
 	| "stateExited"
 	| "transitionStarted"
 	| "transitionEnded"
-	| "motionRequested"
+	| "trackCompleted"
 
-export type AnimationEvent<LayerT, StateT> = {
-	name: AnimationEventName,
-	layer: LayerT,
-	state: StateT?,
-	fromState: StateT?,
-	toState: StateT?,
-	transition: string?,
-	progress: number?,
-}
+export type AnimationEvent<LayerT, StateT> =
+	{
+		name: "stateEntered",
+		layer: LayerT,
+		state: StateT,
+		fromState: StateT?,
+		toState: StateT,
+		transition: string,
+	}
+	| {
+		name: "stateExited",
+		layer: LayerT,
+		state: StateT,
+		fromState: StateT?,
+		toState: StateT,
+		transition: string,
+	}
+	| {
+		name: "transitionStarted",
+		layer: LayerT,
+		fromState: StateT?,
+		toState: StateT,
+		transition: string,
+		progress: number,
+	}
+	| {
+		name: "transitionEnded",
+		layer: LayerT,
+		fromState: StateT?,
+		toState: StateT,
+		transition: string,
+		progress: number,
+	}
+	| DefTypes.TrackCompletedEvent<LayerT, StateT>
 
 export type AnimationEventCallback<LayerT, StateT> = (event: AnimationEvent<LayerT, StateT>) -> ()
 

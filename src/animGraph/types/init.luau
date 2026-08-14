@@ -20,6 +20,8 @@ local StackModifierTypes = require(script.components.stackModifier)
 export type AnimationPosition = DefTypes.AnimationPosition
 export type TimeSource = DefTypes.TimeSource
 export type LogicalTimeReader = DefTypes.LogicalTimeReader
+export type Release = DefTypes.Release
+export type TrackCompletedEvent<LayerT, StateT> = DefTypes.TrackCompletedEvent<LayerT, StateT>
 
 export type ParameterValue = ParameterStoreTypes.ParameterValue
 export type ParameterStore<ParamT> = ParameterStoreTypes.ParameterStore<ParamT>
@@ -111,14 +113,11 @@ export type RobloxLayerBackend = RobloxAnimatorBackendTypes.RobloxLayerBackend
 export type LogicalPriorityBand = RobloxAnimatorBackendTypes.LogicalPriorityBand
 export type RobloxAnimatorBackendConfig<ClipT> =
 	RobloxAnimatorBackendTypes.RobloxAnimatorBackendConfig<ClipT>
-export type TrackDebugState<LayerT, StateT, ClipT> =
-	RobloxAnimatorBackendTypes.TrackDebugState<LayerT, StateT, ClipT>
 export type RobloxAnimatorBackend<LayerT, StateT, ClipT> =
 	RobloxAnimatorBackendTypes.RobloxAnimatorBackend<LayerT, StateT, ClipT>
 export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
 	RobloxAnimatorBackendTypes.RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
 
-export type Release = StackModifierTypes.Release
 export type SpeedModifierMode = StackModifierTypes.SpeedModifierMode
 export type SpeedModifierOptions = StackModifierTypes.SpeedModifierOptions
 export type StackModifierConfig = StackModifierTypes.StackModifierConfig

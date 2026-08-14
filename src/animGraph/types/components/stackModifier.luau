@@ -2,7 +2,9 @@
 --!optimize 2
 --!native
 
-export type Release = () -> ()
+local DefTypes = require(script.Parent.Parent.def)
+
+export type Release = DefTypes.Release
 
 export type SpeedModifierMode = "set" | "add" | "multiply"
 

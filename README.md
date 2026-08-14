@@ -11,13 +11,15 @@ The current implementation provides the authored controller slice:
 - logical layer playback with layer weight, speed, priority, and fade defaults;
 - `ClipNode`, `Blend1DNode`, and `Blend2DNode` motion playback;
 - authored state machines with trigger/parameter transition conditions;
-- controller events for state enter/exit and transition start/end;
+- controller events for state enter/exit, transition start/end, and backend-neutral track completion;
 - controller parameters (`float`, `bool`, trigger, and raw values);
 - coherent once-per-update sampling with controller, layer, and active-play logical readers;
 - validated one-shot initial positions in seconds or normalized form;
 - a Roblox `Animator` backend that drives `AnimationTrack` weight, speed, and
   priority without redundant unchanged operations;
-- debug snapshots for controller, layers, parameters, and backend tracks.
+- live backend-neutral track positioning by `trackKey`;
+- generation-safe fade retirement, physical cleanup, and completed tombstones;
+- debug snapshots for controller, layers, parameters, and active, retiring, or completed backend tracks.
 
 The public API intentionally talks in layers, states, parameters, clips, motion
 nodes, and backends instead of raw Roblox `AnimationTrack`s. That keeps the API
@@ -111,12 +113,21 @@ controller:play("action", AnimGraph.stateMachine({
 controller:setFloat("speed", 4)
 controller:setTrigger("attack")
 
+local releaseCompletion = controller:on("trackCompleted", function(event)
+	if event.name ~= "trackCompleted" then
+		return
+	end
+
+	print("completed", event.trackKey, event.layer, event.state)
+end)
+
 local updateConnection = RunService.PreAnimation:Connect(function()
 	controller:update()
 end)
 
 -- later
 updateConnection:Disconnect()
+releaseCompletion()
 controller:destroy()
 ```
 
@@ -140,6 +151,8 @@ controller:update()
   normal parameters or consume trigger parameters.
 - A backend receives clip requests and applies them to an animation runtime.
   The shipped backend uses Roblox `Animator` and `AnimationTrack`.
+- `trackKey` is the backend-neutral identity used for live positioning and
+  completion; AnimGraph does not expose a playback handle or raw Roblox track.
 - Each update samples one finite `TimeSource` coordinate and each distinct
   selected `LogicalTimeReader` at most once. Play readers replace layer readers,
   which replace the controller default.
@@ -163,9 +176,16 @@ The Roblox backend applies each evaluated clip request by setting:
   `initialPosition` resolves against a positive length.
 
 Repeated application of the same live request does not replay, reposition, or
-restart an unchanged fade. Non-looping terminal initial positions are clamped
-and internally latched so the same materialization cannot replay. Looping
-seconds wrap by length, and normalized `1` canonicalizes to zero.
+restart an unchanged fade. `setTrackPosition` addresses the same live generation
+forward or backward and permanently supersedes a pending initial position.
+Non-looping terminal initial/live positions are clamped and complete once;
+looping seconds wrap by length and normalized `1` canonicalizes to zero.
+
+Natural and accepted terminal completion is forwarded as `trackCompleted` only
+after state commit. Explicit stop, disappearance, replacement, restart, clear,
+and destroy suppress completion. Non-zero retirement fades keep old physical
+generations until `Ended`; completed tombstones retain no raw Roblox objects and
+prevent unchanged desired requests from replaying.
 
 It maps logical priority bands like this by default:
 
@@ -200,6 +220,7 @@ Controller methods:
 - `controller:addLayer(definition)`
 - `controller:hasLayer(layer)`
 - `controller:play(layer, motionNode, options?)`
+- `controller:setTrackPosition(trackKey, position) -> boolean`
 - `controller:stopLayer(layer, fadeTime?)`
 - `controller:setLayerWeight(layer, weight)`
 - `controller:getLayerWeight(layer) -> number?`
@@ -225,10 +246,10 @@ Controller methods:
 
 ## Next Slices
 
-Future work is tracked in the checkpointed
+Further verification and consumer integration are tracked in the checkpointed
 [temporal amendment](docs/todo/temporalAmendment.md) and
-[backlog](docs/todo/backlog.md). CP-TA1 intentionally does not expose live track
-positioning or completion lifecycle APIs.
+[backlog](docs/todo/backlog.md). CP-TA2 is implemented and awaiting operator
+review; package publishing and VoxelMMO migration remain separate work.
 
 ## Development
 
@@ -264,4 +285,7 @@ camera at it, and provides UI buttons for layer playback, layer weights, action
 priority mapping, authored state-machine triggers, blend parameters, and debug
 snapshots. The control panel groups related controls into sections, keeps the
 console collapsed by default, and includes scripted gameplay-like sequences for
-testing chained locomotion/action operations.
+testing chained locomotion/action operations. Its Temporal Lifecycle section
+adds independent held/advancing readers, live forward/back positioning, exact
+terminal and natural completion, looping, same-key replacement, reappearance
+during fade, and cleanup visibility.

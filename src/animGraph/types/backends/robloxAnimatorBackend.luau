@@ -3,6 +3,7 @@
 --!native
 
 local AnimationBackendTypes = require(script.Parent.animationBackend)
+local DefTypes = require(script.Parent.Parent.def)
 local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
 
 export type AssetId = number
@@ -24,16 +25,12 @@ export type RobloxAnimatorBackendConfig<ClipT> = {
 	priorityBands: { LogicalPriorityBand }?,
 }
 
-export type TrackDebugState<LayerT, StateT, ClipT> = {
+export type CompletedTombstone<LayerT, StateT, ClipT> = {
 	trackKey: string,
 	layer: LayerT,
 	state: StateT?,
 	clip: ClipT,
-	weight: number,
-	speed: number,
-	logicalPriority: number,
-	robloxPriority: Enum.AnimationPriority,
-	isPlaying: boolean,
+	generation: number,
 }
 
 export type RobloxAnimatorBackend<LayerT, StateT, ClipT> =
@@ -46,8 +43,15 @@ export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
 		_defaultFadeOut: number,
 		_defaultPriority: Enum.AnimationPriority,
 		_priorityBands: { LogicalPriorityBand },
-		_playbacks: { [string]: any },
-		_trackStates: { [string]: TrackDebugState<LayerT, StateT, ClipT> },
+		_active: { [string]: any },
+		_physical: { [number]: any },
+		_retiring: { [number]: any },
+		_completed: { [string]: CompletedTombstone<LayerT, StateT, ClipT> },
+		_completionListeners: { (event: DefTypes.TrackCompletedEvent<LayerT, StateT>) -> () },
+		_pendingCompletions: { DefTypes.TrackCompletedEvent<LayerT, StateT> },
+		_nextGeneration: number,
+		_applyDepth: number,
+		_dispatchingCompletions: boolean,
 		_warnings: { string },
 		_destroyed: boolean,
 
@@ -55,11 +59,18 @@ export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
 			self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
 			request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
 		) -> Enum.AnimationPriority,
-		_getOrLoadPlayback: (
+		_materialize: (
 			self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
-			trackKey: string,
-			clip: ClipT
+			request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
+			robloxPriority: Enum.AnimationPriority
 		) -> any,
+		_retire: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, playback: any, fadeTime: number) -> (),
+		_complete: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, playback: any) -> (),
+		_handleStopped: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
+		_handleEnded: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
+		_cleanupPhysical: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
+		_clearPhysical: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>) -> (),
+		_flushCompletions: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>) -> (),
 	}
 
 return {}

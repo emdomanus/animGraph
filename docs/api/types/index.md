@@ -9,6 +9,8 @@ namespace instead of requiring implementation modules.
 - `AnimationPosition`
 - `TimeSource`
 - `LogicalTimeReader`
+- `Release`
+- `TrackCompletedEvent<LayerT, StateT>`
 
 See [Definitions](/api/types/definitions).
 
@@ -64,7 +66,6 @@ re-exported as root consumer types.
 
 ## Components
 
-- `Release`
 - `SpeedModifierMode`
 - `SpeedModifierOptions`
 - `StackModifier`

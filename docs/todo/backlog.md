@@ -1,11 +1,11 @@
 # Backlog
 
-These items are outside CP-TA1 and do not define the current public contract.
+These items are outside implemented CP-TA2 and do not define the current public contract.
 
 ## Near Term
 
-- CP-TA2 live positioning and backend-neutral completion from the active
-  temporal amendment.
+- CP-TA3 verification and consumer-readiness review from the active temporal
+  amendment.
 - Exit-time transition conditions and transition interruption policy.
 - Focused blend-weight and transition-condition coverage.
 

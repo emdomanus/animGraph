@@ -16,14 +16,17 @@ local updateConnection = RunService.PreAnimation:Connect(function()
 end)
 ```
 
-There is no controller-owned frame connection and no delta argument. For manual
-timing experiments, replace a layer or active play reader with a caller-owned
-reader that holds or advances its logical position.
+There is no controller-owned frame connection and no delta argument. The
+Temporal Lifecycle controls independently hold or advance the base and action
+readers while leaving native speed controls separate.
 
-Useful Studio observations for CP-TA1 include initial seconds/normalized starts,
-zero-length pending resolution, loop wrapping, terminal non-loop starts,
-`forceRestart`, repeated unchanged apply, and independent logical reader versus
-native speed behavior.
+The same section can play a known non-looping track to natural completion, play
+a loop, position the live track forward to 75% and backward to 25%, address the
+exact terminal boundary, force restart, replace a clip under the same key,
+reappear while old physics fades, stop with a one-second fade, and invoke the
+hard clear boundary. Completion appears in the console. The debug panel reports
+generation, active/retiring/completed lifecycle, and whether physical ownership
+is still present so fade and cleanup ordering are observable.
 
 Run deterministic and static checks from the repository root:
 

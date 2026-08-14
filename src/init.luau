@@ -10,6 +10,7 @@ export type AssetId = Types.AssetId
 export type AnimationPosition = Types.AnimationPosition
 export type TimeSource = Types.TimeSource
 export type LogicalTimeReader = Types.LogicalTimeReader
+export type TrackCompletedEvent<LayerT, StateT> = Types.TrackCompletedEvent<LayerT, StateT>
 export type ParameterValue = Types.ParameterValue
 export type AnimationEventName = Types.AnimationEventName
 export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT>

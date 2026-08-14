@@ -12,6 +12,7 @@ local GUI_NAME = "AnimGraphDevHarness"
 local DUMMY_NAME = "AnimGraphR6Dummy"
 local DUMMY_POSITION = Vector3.new(0, 1000, 0)
 local DUMMY_PIVOT = CFrame.new(DUMMY_POSITION)
+local LIFECYCLE_TRACK_KEY = "dev/action/lifecycle"
 
 type Layer = "base" | "action"
 type State = "empty" | "locomotion" | "idle" | "walk" | "jump" | "wave" | "cheer" | "dance"
@@ -89,6 +90,12 @@ local speedValue = 0
 local consoleExpanded = false
 local sequenceToken = 0
 local activeSequenceName = "none"
+local baseLogicalPosition = 0
+local actionLogicalPosition = 0
+local lastBaseFrameNow: number? = nil
+local lastActionFrameNow: number? = nil
+local baseLogicalHeld = false
+local actionLogicalHeld = false
 
 local function appendLog(message: string): ()
 	print("[AnimGraphDev] " .. message)
@@ -150,16 +157,42 @@ local function updateSummary(): ()
 
 	setSummary(
 		string.format(
-			"locomotion=%s  baseWeight=%s  actionWeight=%s  actionPriority=%d/%s  active=%s  sequence=%s",
+			"locomotion=%s  base=%s  action=%s  actionPriority=%d/%s  active=%s  sequence=%s",
 			formatSpeed(speedValue),
-			formatWeight(baseWeight),
-			formatWeight(actionWeight),
+			if baseLogicalHeld then "held" else "advancing",
+			if actionLogicalHeld then "held" else "advancing",
 			actionPriority,
 			priorityText,
 			activeActionClip,
 			activeSequenceName
 		)
 	)
+end
+
+local function sampleLogicalPosition(frameNow: number, layer: Layer): number
+	if layer == "base" then
+		local previous = lastBaseFrameNow
+		lastBaseFrameNow = frameNow
+		if previous ~= nil and not baseLogicalHeld then
+			baseLogicalPosition += math.max(frameNow - previous, 0)
+		end
+		return baseLogicalPosition
+	end
+
+	local previous = lastActionFrameNow
+	lastActionFrameNow = frameNow
+	if previous ~= nil and not actionLogicalHeld then
+		actionLogicalPosition += math.max(frameNow - previous, 0)
+	end
+	return actionLogicalPosition
+end
+
+local function baseLogicalReader(frameNow: number): number
+	return sampleLogicalPosition(frameNow, "base")
+end
+
+local function actionLogicalReader(frameNow: number): number
+	return sampleLogicalPosition(frameNow, "action")
 end
 
 local function getController(): AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
@@ -420,6 +453,87 @@ local function restartAction(): ()
 	end)
 end
 
+local function setLogicalHeld(layer: Layer, held: boolean): ()
+	if layer == "base" then
+		baseLogicalHeld = held
+	else
+		actionLogicalHeld = held
+	end
+	appendLog(tostring(layer) .. " logical reader = " .. (if held then "held" else "advancing"))
+	updateSummary()
+end
+
+local function playLifecycleClip(clip: Clip, looped: boolean, forceRestart: boolean?): ()
+	activeActionClip = clip
+	local node = AnimGraph.clipNode.new(clip, {
+		name = "Lifecycle " .. tostring(clip),
+		trackKey = LIFECYCLE_TRACK_KEY,
+		looped = looped,
+	}) :: any
+	getController():play("action", node, {
+		state = clip :: State,
+		trackKey = LIFECYCLE_TRACK_KEY,
+		looped = looped,
+		fadeTime = 0.6,
+		forceRestart = forceRestart == true,
+		logicalTimeReader = actionLogicalReader,
+	})
+	appendLog(
+		"lifecycle play clip="
+			.. tostring(clip)
+			.. " looped="
+			.. tostring(looped)
+			.. " restart="
+			.. tostring(forceRestart == true)
+	)
+	updateSummary()
+end
+
+local function setLifecyclePosition(position: AnimGraph.AnimationPosition, label: string): ()
+	local accepted = getController():setTrackPosition(LIFECYCLE_TRACK_KEY, position)
+	appendLog("lifecycle position " .. label .. " accepted=" .. tostring(accepted))
+end
+
+local function playThenPositionTerminal(): ()
+	playLifecycleClip("wave", false)
+	task.delay(0.1, function()
+		if controller ~= nil then
+			setLifecyclePosition({ kind = "normalized", value = 1 }, "terminal")
+		end
+	end)
+end
+
+local function replaceLifecycleClip(): ()
+	playLifecycleClip("wave", false)
+	task.delay(0.2, function()
+		if controller ~= nil then
+			playLifecycleClip("cheer", false)
+		end
+	end)
+end
+
+local function reappearDuringFade(): ()
+	playLifecycleClip("wave", false)
+	task.delay(0.2, function()
+		local activeController = controller
+		if activeController == nil then
+			return
+		end
+		activeController:stopLayer("action", 1)
+		appendLog("lifecycle retiring with 1.0s fade")
+	end)
+	task.delay(0.35, function()
+		if controller ~= nil then
+			playLifecycleClip("cheer", false)
+		end
+	end)
+end
+
+local function clearPhysicalLifecycle(): ()
+	getController():clear()
+	appendLog("controller clear: immediate physical cleanup boundary")
+end
+
 local function setBaseWeight(value: number): ()
 	baseWeight = clamp01(value)
 	getController():setLayerWeight("base", baseWeight)
@@ -537,6 +651,12 @@ local function resetHarnessState(): ()
 	actionPriority = 100
 	actionRobloxPriority = nil
 	activeActionClip = "wave"
+	baseLogicalPosition = 0
+	actionLogicalPosition = 0
+	lastBaseFrameNow = nil
+	lastActionFrameNow = nil
+	baseLogicalHeld = false
+	actionLogicalHeld = false
 	replayControllerGraphs()
 	appendLog("reset harness state")
 end
@@ -808,6 +928,11 @@ local function getTrackRobloxPriority(track: any): any
 	return if typeof(details) == "table" then details.robloxPriority else nil
 end
 
+local function getTrackDetail(track: any, key: string): any
+	local details = track.details
+	return if typeof(details) == "table" then details[key] else nil
+end
+
 local function dumpDebugSnapshot(): ()
 	local snapshot = getController():getDebugSnapshot()
 	appendLog("debug dump:")
@@ -828,6 +953,10 @@ local function dumpDebugSnapshot(): ()
 		appendLog(
 			"  track "
 				.. track.trackKey
+				.. " generation="
+				.. tostring(getTrackDetail(track, "generation"))
+				.. " lifecycle="
+				.. tostring(getTrackDetail(track, "lifecycle"))
 				.. " weight="
 				.. formatWeight(track.weight)
 				.. " priority="
@@ -919,9 +1048,12 @@ local function buildDebugText(): string
 	lines[#lines + 1] = "Backend Tracks"
 	for _, track in snapshot.backend.tracks do
 		lines[#lines + 1] = string.format(
-			"%s  clip=%s  weight=%.2f  rate=%.2f  logical=%d  roblox=%s",
+			"%s  clip=%s  gen=%s  %s  physical=%s  weight=%.2f  rate=%.2f  logical=%d  roblox=%s",
 			track.trackKey,
 			tostring(track.clip),
+			tostring(getTrackDetail(track, "generation")),
+			tostring(getTrackDetail(track, "lifecycle")),
+			tostring(getTrackDetail(track, "physicalPresent")),
 			track.weight,
 			track.speed,
 			track.logicalPriority,
@@ -1393,7 +1525,87 @@ local function buildUi(): ()
 		},
 	})
 
-	makeSection(controls, "Debug Tools", 6, {
+	makeSection(controls, "Temporal Lifecycle", 6, {
+		{
+			text = "Hold Base Reader",
+			callback = function()
+				setLogicalHeld("base", true)
+			end,
+		},
+		{
+			text = "Advance Base Reader",
+			callback = function()
+				setLogicalHeld("base", false)
+			end,
+		},
+		{
+			text = "Hold Action Reader",
+			callback = function()
+				setLogicalHeld("action", true)
+			end,
+		},
+		{
+			text = "Advance Action Reader",
+			callback = function()
+				setLogicalHeld("action", false)
+			end,
+		},
+		{
+			text = "Play Natural End",
+			callback = function()
+				playLifecycleClip("wave", false)
+			end,
+		},
+		{
+			text = "Play Loop",
+			callback = function()
+				playLifecycleClip("dance", true)
+			end,
+		},
+		{
+			text = "Position 75%",
+			callback = function()
+				setLifecyclePosition({ kind = "normalized", value = 0.75 }, "75%")
+			end,
+		},
+		{
+			text = "Position 25%",
+			callback = function()
+				setLifecyclePosition({ kind = "normalized", value = 0.25 }, "25%")
+			end,
+		},
+		{
+			text = "Exact Terminal",
+			callback = playThenPositionTerminal,
+		},
+		{
+			text = "Replace Same Key",
+			callback = replaceLifecycleClip,
+		},
+		{
+			text = "Reappear In Fade",
+			callback = reappearDuringFade,
+		},
+		{
+			text = "Force Restart",
+			callback = function()
+				playLifecycleClip(activeActionClip, false, true)
+			end,
+		},
+		{
+			text = "Stop Fade 1s",
+			callback = function()
+				getController():stopLayer("action", 1)
+				appendLog("action stop with 1.0s fade")
+			end,
+		},
+		{
+			text = "Clear Physics",
+			callback = clearPhysicalLifecycle,
+		},
+	})
+
+	makeSection(controls, "Debug Tools", 7, {
 		{
 			text = "Dump Debug",
 			callback = dumpDebugSnapshot,
@@ -1504,7 +1716,7 @@ local function setupController(animator: Animator): ()
 			return assetId
 		end,
 		defaultFadeOut = 0.15,
-	})
+	}) :: any
 
 	local layerDefinitions: { AnimGraph.LayerDefinition<Layer, LayerBackend> } = {
 		{
@@ -1524,15 +1736,14 @@ local function setupController(animator: Animator): ()
 			layerBackend = makeRobloxLayerBackend(actionRobloxPriority),
 			defaultFadeIn = 0.05,
 			defaultFadeOut = 0.12,
+			logicalTimeReader = actionLogicalReader,
 		},
 	}
 
 	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 		backend = backend,
 		timeSource = os.clock,
-		logicalTimeReader = function(frameNow: number): number
-			return frameNow
-		end,
+		logicalTimeReader = baseLogicalReader,
 		layers = layerDefinitions,
 	}
 
@@ -1540,23 +1751,28 @@ local function setupController(animator: Animator): ()
 
 	local activeController = getController()
 	activeController:on("transitionStarted", function(event)
-		if event.layer == "action" then
+		if event.name == "transitionStarted" and event.layer == "action" then
 			appendLog("event transitionStarted " .. tostring(event.transition))
 		end
 	end)
 	activeController:on("transitionEnded", function(event)
-		if event.layer == "action" then
+		if event.name == "transitionEnded" and event.layer == "action" then
 			appendLog("event transitionEnded " .. tostring(event.transition))
 		end
 	end)
 	activeController:on("stateEntered", function(event)
-		if event.layer == "action" then
+		if event.name == "stateEntered" and event.layer == "action" then
 			appendLog("event stateEntered " .. tostring(event.state))
 		end
 	end)
 	activeController:on("stateExited", function(event)
-		if event.layer == "action" then
+		if event.name == "stateExited" and event.layer == "action" then
 			appendLog("event stateExited " .. tostring(event.state))
+		end
+	end)
+	activeController:on("trackCompleted", function(event)
+		if event.name == "trackCompleted" then
+			appendLog("event trackCompleted " .. event.trackKey)
 		end
 	end)
 

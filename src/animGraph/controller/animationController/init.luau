@@ -56,12 +56,17 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._parameters = ParameterStore.new() :: any
 	self._eventBus = EventBus.new() :: any
 	self._destroyed = false
+	self._releaseBackendCompletion = nil
 
 	if config.layers ~= nil then
 		for _, layer in config.layers do
 			self:addLayer(layer)
 		end
 	end
+
+	self._releaseBackendCompletion = self._backend:bindToTrackCompleted(function(event)
+		self._eventBus:emit(event)
+	end)
 
 	return self
 end
@@ -101,6 +106,19 @@ function AnimationController.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	end
 
 	layerRuntime:play(motion, options)
+end
+
+function AnimationController.setTrackPosition<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	trackKey: string,
+	position: DefTypes.AnimationPosition
+): boolean
+	AnimationPosition.assertValid(position)
+	if self._destroyed then
+		return false
+	end
+
+	return self._backend:setTrackPosition(trackKey, position)
 end
 
 function AnimationController.stopLayer<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
@@ -358,6 +376,11 @@ function AnimationController.destroy<LayerT, StateT, ParamT, ClipT, LayerBackend
 	end
 
 	self._destroyed = true
+	local releaseBackendCompletion = self._releaseBackendCompletion
+	self._releaseBackendCompletion = nil
+	if releaseBackendCompletion ~= nil then
+		releaseBackendCompletion()
+	end
 	self:clear()
 	self._eventBus:clear()
 	self._backend:destroy()

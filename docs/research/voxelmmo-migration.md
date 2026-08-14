@@ -39,8 +39,8 @@ Graph logical delta and native playback speed are separate:
   either character's unrelated layer readers.
 
 On a classified discontinuity, VoxelMMO will eventually rebase its monotonic
-reader adapter and use the CP-TA2 live-position operation. CP-TA1 adds neither
-that operation nor consumer migration code.
+reader adapter and use CP-TA2's `setTrackPosition` operation. CP-TA2 adds the
+package operation and completion event, but no consumer migration code.
 
 ## Out of Scope Here
 

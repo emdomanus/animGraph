@@ -34,6 +34,11 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 		motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?
 	) -> (),
+	setTrackPosition: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		trackKey: string,
+		position: DefTypes.AnimationPosition
+	) -> boolean,
 	stopLayer: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
@@ -133,6 +138,7 @@ export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT
 		_layerOrder: { LayerT },
 		_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
 		_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
+		_releaseBackendCompletion: DefTypes.Release?,
 		_destroyed: boolean,
 	}
 

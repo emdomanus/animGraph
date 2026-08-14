@@ -9,6 +9,15 @@ local transformed = ModuleLoader.write({
 	tempDir = ".tmp/lune-smoke",
 })
 
+type StateEnteredEvent = {
+	name: "stateEntered",
+	layer: string,
+	state: string,
+	fromState: string?,
+	toState: string,
+	transition: string,
+}
+
 local ok, result = pcall(function(): ()
 	local EventBus = transformed.requireModule("animGraph/controller/animationController/eventBus.luau") :: any
 	local eventBus = EventBus.new()
@@ -17,20 +26,29 @@ local ok, result = pcall(function(): ()
 		observedState = event.state
 	end)
 
-	eventBus:emit({
+	local idleEntered: StateEnteredEvent = {
 		name = "stateEntered",
 		layer = "base",
 		state = "idle",
-	})
+		fromState = nil,
+		toState = "idle",
+		transition = "initial",
+	}
+	eventBus:emit(idleEntered)
 	assert(observedState == "idle", "event bus did not dispatch the emitted state")
 
 	release()
-	eventBus:emit({
+	local runEntered: StateEnteredEvent = {
 		name = "stateEntered",
 		layer = "base",
 		state = "run",
-	})
+		fromState = "idle",
+		toState = "run",
+		transition = "run",
+	}
+	eventBus:emit(runEntered)
 	assert(observedState == "idle", "released event listener was invoked")
+	print("PASS smoke: stateEntered uses the complete discriminated event variant")
 end)
 
 transformed.cleanup()

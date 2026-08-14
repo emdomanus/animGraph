@@ -3,6 +3,7 @@
 --!native
 
 local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
+local DefTypes = require(script.Parent.Parent.def)
 
 export type PerJointFallbackMode = "full" | "priorityTier" | "none"
 
@@ -36,6 +37,15 @@ export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
 	) -> (),
+	setTrackPosition: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		trackKey: string,
+		position: DefTypes.AnimationPosition
+	) -> boolean,
+	bindToTrackCompleted: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		callback: (event: DefTypes.TrackCompletedEvent<LayerT, StateT>) -> ()
+	) -> DefTypes.Release,
 	stopLayer: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		layer: LayerT,

@@ -14,7 +14,7 @@ Caller
   owns AnimationController and injected backend
     AnimationController owns ParameterStore, EventBus, and LayerRuntime objects
       LayerRuntime owns one active play and its logical baseline
-    RobloxAnimatorBackend owns materialized AnimationTrack state
+    RobloxAnimatorBackend owns active generations, retiring physics, and completed tombstones
 ```
 
 AnimGraph never subscribes to the supplied functions and never destroys them.
@@ -30,8 +30,8 @@ consumer policy -> AnimGraph controller -> motion/runtime types -> backend
 ```
 
 Runtime modules use script-relative requires. Public contracts are declared
-under `src/animGraph/types`; the shared `AnimationPosition`, `TimeSource`, and
-`LogicalTimeReader` definitions have one canonical declaration in
+under `src/animGraph/types`; the shared `AnimationPosition`, `TimeSource`,
+`LogicalTimeReader`, `Release`, and `TrackCompletedEvent` definitions have one canonical declaration in
 `src/animGraph/types/def/init.luau`. Implementation-only validation lives under
 `src/animGraph/utils`.
 
@@ -87,26 +87,36 @@ controller-wide delta argument. A custom backend can use each request's
 `deltaTime`; the shipped Roblox backend intentionally ignores delta-only changes
 when native desired state is unchanged.
 
-The Roblox backend owns an internal playback materialization per track key. It
-validates a whole batch before loading or mutating tracks. For one live
-materialization it remembers effective weight, speed, loop flag, priority,
-pending initial position, and completion state. That private state provides:
+The Roblox backend owns one active materialized generation per `trackKey`. It
+validates a whole batch before loading or mutating tracks. Each physical
+generation has a monotonic token, while retiring generations are held by token
+so a new generation with the same key can coexist during a fade. That private
+state provides:
 
 - one-shot initial positioning after `Play` and positive length resolution;
 - exact non-looping clamp and looping wrap behavior;
-- `forceRestart` as an explicit new internal generation;
+- `forceRestart` and same-key clip replacement as explicit new physical generations;
 - no redundant `Play`, position write, weight/speed adjustment, property write,
   or fade restart for unchanged desired state;
-- an internal terminal latch that prevents a completed materialization from
-  replaying while the same request remains present.
+- backend-neutral live positioning without replaying or replacing a live generation;
+- one completion event for natural or accepted terminal non-looping playback;
+- a lightweight completed tombstone that retains only key, clip, layer/state,
+  and generation identity after physical cleanup, preventing unchanged replay.
 
-CP-TA1 intentionally exposes no completion event, live position operation,
-completed tombstone, or physical fade-retirement lifecycle. Those are separate
-CP-TA2 work.
+`Stopped` classifies completion only while its captured token is still the
+active non-looping generation. Explicit retirement invalidates that
+classification before calling `Stop(fadeTime)`. `Ended` owns final signal,
+`AnimationTrack`, and `Animation` cleanup after non-zero fades; zero-fade and
+already-inactive retirement clean immediately. Completion is committed before
+subscriber dispatch, and both backend and controller event buses snapshot
+listeners so synchronous re-entry cannot mutate a stale generation.
 
 ## Hard Boundaries
 
 `clear()` and `destroy()` remain physical lifecycle boundaries. The package does
 not promise to retain backend tracks or a consumer playback handle across them.
+Both use immediate zero-fade cleanup, remove completed tombstones, and suppress
+completion from retired physics. Controller destruction first releases its one
+backend completion binding.
 The controller owns no `RunService` connection; consumers disconnect their own
 scheduler before destruction when appropriate.

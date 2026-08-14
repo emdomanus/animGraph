@@ -19,8 +19,13 @@ local function newBackend(): any
 		applyCount = 0,
 		batches = {} :: { any },
 		stopCount = 0,
+		stopCalls = {} :: { any },
 		clearCount = 0,
 		destroyCount = 0,
+		bindCount = 0,
+		bindingReleaseCount = 0,
+		positionCalls = {} :: { any },
+		completionListeners = {} :: { any },
 	}
 
 	function backend:apply(requests): ()
@@ -28,8 +33,41 @@ local function newBackend(): any
 		self.batches[#self.batches + 1] = requests
 	end
 
-	function backend:stopLayer(_layer, _fadeTime): ()
+	function backend:stopLayer(layer, fadeTime): ()
 		self.stopCount += 1
+		self.stopCalls[#self.stopCalls + 1] = { layer = layer, fadeTime = fadeTime }
+	end
+
+	function backend:setTrackPosition(trackKey, position): boolean
+		self.positionCalls[#self.positionCalls + 1] = {
+			trackKey = trackKey,
+			position = position,
+		}
+		return self.positionResult ~= false
+	end
+
+	function backend:bindToTrackCompleted(callback): () -> ()
+		self.bindCount += 1
+		self.completionListeners[#self.completionListeners + 1] = callback
+		local released = false
+		return function()
+			if released then
+				return
+			end
+			released = true
+			self.bindingReleaseCount += 1
+			for index = #self.completionListeners, 1, -1 do
+				if self.completionListeners[index] == callback then
+					table.remove(self.completionListeners, index)
+				end
+			end
+		end
+	end
+
+	function backend:emitTrackCompleted(event): ()
+		for _, callback in table.clone(self.completionListeners) do
+			callback(event)
+		end
 	end
 
 	function backend:clear(): ()
@@ -570,6 +608,187 @@ local ok, result = pcall(function(): number
 		expectError(function()
 			ClipNode.new("invalid", { initialPosition = { kind = "frames", value = 1 } })
 		end, "invalid ClipNode position was accepted")
+	end)
+
+	test("binds backend completion once, forwards it publicly, and releases on destroy", function(): ()
+		local backend = newBackend()
+		local controller = AnimationController.new({
+			backend = backend,
+			timeSource = function(): number
+				return 1
+			end,
+			logicalTimeReader = function(_frameNow: number): number
+				return 1
+			end,
+			layers = { { id = "base" } },
+		})
+		local events = {} :: { any }
+		controller:on("trackCompleted", function(event)
+			events[#events + 1] = event
+		end)
+		backend:emitTrackCompleted({
+			name = "trackCompleted",
+			trackKey = "base/idle",
+			layer = "base",
+			state = "idle",
+		})
+		assert(backend.bindCount == 1, "controller did not bind the backend exactly once")
+		assert(#events == 1 and events[1].trackKey == "base/idle", "controller did not forward completion")
+		controller:destroy()
+		backend:emitTrackCompleted({
+			name = "trackCompleted",
+			trackKey = "stale",
+			layer = "base",
+			state = "idle",
+		})
+		assert(backend.bindingReleaseCount == 1, "controller did not release its backend binding")
+		assert(#events == 1, "destroyed controller forwarded a stale completion")
+	end)
+
+	test("failed construction does not acquire the backend completion binding", function(): ()
+		local backend = newBackend()
+		expectError(function()
+			AnimationController.new({
+				backend = backend,
+				timeSource = function(): number
+					return 1
+				end,
+				logicalTimeReader = function(_frameNow: number): number
+					return 1
+				end,
+				layers = {
+					{ id = "base" },
+					{ id = "base" },
+				},
+			})
+		end, "duplicate layer configuration did not fail construction")
+		assert(backend.bindCount == 0, "failed construction acquired a backend completion binding")
+		assert(#backend.completionListeners == 0, "failed construction retained a backend completion listener")
+		assert(backend.bindingReleaseCount == 0, "failed construction created a release obligation")
+	end)
+
+	test("validates and delegates live positions without touching logical baselines", function(): ()
+		local backend = newBackend()
+		local logicalPosition = 4
+		local controller = AnimationController.new({
+			backend = backend,
+			timeSource = function(): number
+				return 1
+			end,
+			logicalTimeReader = function(_frameNow: number): number
+				return logicalPosition
+			end,
+			layers = { { id = "base" } },
+		})
+		controller:play("base", makeMotion("base/idle", "idle", 1))
+		controller:update()
+		assert(controller:setTrackPosition("base/idle", { kind = "seconds", value = 3 }), "valid controller position was rejected")
+		expectError(function()
+			controller:setTrackPosition("base/idle", { kind = "normalized", value = 2 })
+		end, "controller accepted an invalid live position")
+		assert(#backend.positionCalls == 1, "invalid controller position reached the backend")
+		logicalPosition = 6
+		controller:update()
+		assert(backend.batches[2][1].deltaTime == 2, "live positioning rewrote the logical reader baseline")
+		controller:destroy()
+		assert(not controller:setTrackPosition("base/idle", { kind = "seconds", value = 1 }), "destroyed controller accepted a live position")
+		assert(#backend.positionCalls == 1, "destroyed controller delegated a live position")
+	end)
+
+	test("completion callbacks may re-enter controller lifecycle operations", function(): ()
+		local backend = newBackend()
+		local controller = AnimationController.new({
+			backend = backend,
+			timeSource = function(): number
+				return 1
+			end,
+			logicalTimeReader = function(_frameNow: number): number
+				return 1
+			end,
+			layers = { { id = "base" } },
+		})
+		local calls = 0
+		controller:on("trackCompleted", function(event)
+			if event.name ~= "trackCompleted" then
+				return
+			end
+			calls += 1
+			controller:play("base", makeMotion("replacement", "wave", 1))
+			controller:stopLayer("base", 0)
+			assert(controller:setTrackPosition("replacement", { kind = "seconds", value = 1 }), "re-entrant position delegation failed")
+			controller:clear()
+			controller:destroy()
+		end)
+		backend:emitTrackCompleted({
+			name = "trackCompleted",
+			trackKey = "base/idle",
+			layer = "base",
+			state = "idle",
+		})
+		assert(calls == 1, "re-entrant controller completion duplicated")
+		assert(backend.stopCount == 1, "re-entrant stopLayer did not reach the backend")
+		assert(backend.clearCount == 2 and backend.destroyCount == 1, "re-entrant clear/destroy ownership was wrong")
+		assert(backend.bindingReleaseCount == 1, "re-entrant destroy leaked the completion binding")
+	end)
+
+	test("controller event dispatch snapshots listener mutation", function(): ()
+		local backend = newBackend()
+		local controller = AnimationController.new({
+			backend = backend,
+			timeSource = function(): number
+				return 1
+			end,
+			logicalTimeReader = function(_frameNow: number): number
+				return 1
+			end,
+		})
+		local calls = {} :: { string }
+		local releaseFirst = function() end
+		local releaseSecond = function() end
+		local added = false
+		releaseFirst = controller:on("trackCompleted", function()
+			calls[#calls + 1] = "first"
+			releaseFirst()
+			releaseSecond()
+			if not added then
+				added = true
+				controller:on("trackCompleted", function()
+					calls[#calls + 1] = "added"
+				end)
+			end
+		end)
+		releaseSecond = controller:on("trackCompleted", function()
+			calls[#calls + 1] = "second"
+		end)
+		local event = {
+			name = "trackCompleted",
+			trackKey = "key",
+			layer = "base",
+			state = "idle",
+		}
+		backend:emitTrackCompleted(event)
+		backend:emitTrackCompleted(event)
+		assert(table.concat(calls, ",") == "first,second,added", "controller listener mutation changed a dispatch snapshot")
+	end)
+
+	test("stopLayer resolves the layer default unless an explicit fade is supplied", function(): ()
+		local backend = newBackend()
+		local controller = AnimationController.new({
+			backend = backend,
+			timeSource = function(): number
+				return 1
+			end,
+			logicalTimeReader = function(_frameNow: number): number
+				return 1
+			end,
+			layers = { { id = "base", defaultFadeOut = 0.75 } },
+		})
+		controller:play("base", makeMotion("base/idle", "idle", 1))
+		controller:stopLayer("base")
+		controller:play("base", makeMotion("base/idle", "idle", 1))
+		controller:stopLayer("base", 0.35)
+		assert(backend.stopCalls[1].fadeTime == 0.75, "stopLayer did not use the resolved layer default")
+		assert(backend.stopCalls[2].fadeTime == 0.35, "stopLayer ignored its explicit fade")
 	end)
 
 	return testCount

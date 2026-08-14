@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Added canonical `TrackCompletedEvent`, the discriminated `AnimationEvent`
+  union, `controller:setTrackPosition`, and backend live-position/completion
+  ports; removed the unused `motionRequested` event name.
+- Added Roblox generation tokens, same-key clip replacement, force-restart
+  rematerialization, completed tombstones, stale-signal guards, and snapshot-safe
+  re-entrant completion dispatch.
+- Added explicit fade-retirement ownership: `Stopped` classifies only natural
+  active completion, `Ended` owns non-zero-fade physical cleanup, and zero-fade,
+  clear, and destroy boundaries clean immediately without false completion.
+- Extended deterministic lifecycle coverage and the Studio dev harness for live
+  addressing, terminal/natural completion, looping, replacement, reappearance
+  during fade, listener mutation, and physical cleanup visibility.
 - Replaced the controller-wide delta argument with caller-scheduled `update()` that
   samples one `TimeSource` coordinate and selected play/layer/default
   `LogicalTimeReader` functions, derives per-activation deltas, and adds

@@ -51,7 +51,7 @@ AnimGraph owns:
 - sampled reader selection and per-activation baselines;
 - parameters, triggers, state machines, and graph events;
 - request assembly and duplicate-key validation;
-- backend-neutral logical delta and initial-position contracts;
+- backend-neutral logical delta, initial/live positioning, and completion contracts;
 - Roblox track materialization through the shipped backend.
 
 AnimGraph does not own character spawning, combat, VFX, network replication,

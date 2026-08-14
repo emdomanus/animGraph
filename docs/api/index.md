@@ -16,4 +16,4 @@ re-exported constructors.
 
 See the [type index](/api/types/) for every type re-exported from
 `src/init.luau` and [definitions](/api/types/definitions) for the canonical
-timing and position types.
+timing, position, release, and completion types.

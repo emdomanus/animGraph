@@ -16,6 +16,43 @@ FakeRoblox.Enum = {
 
 local animations: { any } = {}
 
+local function newSignal(): any
+	local listeners: { any } = {}
+	local signal = {}
+
+	function signal:Connect(callback): any
+		local connection = {
+			Connected = true,
+		}
+		function connection.Disconnect(activeConnection): ()
+			if not activeConnection.Connected then
+				return
+			end
+			activeConnection.Connected = false
+			for index = #listeners, 1, -1 do
+				if listeners[index] == callback then
+					table.remove(listeners, index)
+					break
+				end
+			end
+		end
+		listeners[#listeners + 1] = callback
+		return connection
+	end
+
+	function signal:Fire(...): ()
+		for _, callback in table.clone(listeners) do
+			callback(...)
+		end
+	end
+
+	function signal:getConnectionCount(): number
+		return #listeners
+	end
+
+	return signal
+end
+
 local function newAnimation(): any
 	local fields = {
 		AnimationId = "",
@@ -51,6 +88,8 @@ function FakeRoblox.newTrack(length: number?): any
 		TimePosition = 0,
 		Looped = false,
 		Priority = nil,
+		Stopped = newSignal(),
+		Ended = newSignal(),
 	}
 	local calls = {
 		play = 0,
@@ -63,6 +102,7 @@ function FakeRoblox.newTrack(length: number?): any
 		positionWrites = {} :: { number },
 		weights = {} :: { { weight: number, fadeTime: number } },
 		speeds = {} :: { number },
+		stopFades = {} :: { number },
 	}
 
 	local track = setmetatable({}, {
@@ -81,6 +121,16 @@ function FakeRoblox.newTrack(length: number?): any
 				return function(_, value: number)
 					fields.TimePosition = value
 				end
+			elseif key == "fireStopped" then
+				return function()
+					fields.IsPlaying = false
+					fields.Stopped:Fire()
+				end
+			elseif key == "fireEnded" then
+				return function()
+					fields.IsPlaying = false
+					fields.Ended:Fire()
+				end
 			elseif key == "Play" then
 				return function(_, _fadeTime: number, _weight: number, _speed: number)
 					calls.play += 1
@@ -98,9 +148,11 @@ function FakeRoblox.newTrack(length: number?): any
 					calls.speeds[#calls.speeds + 1] = speed
 				end
 			elseif key == "Stop" then
-				return function(_, _fadeTime: number)
+				return function(_, fadeTime: number)
 					calls.stop += 1
+					calls.stopFades[#calls.stopFades + 1] = fadeTime
 					fields.IsPlaying = false
+					fields.Stopped:Fire()
 				end
 			elseif key == "Destroy" then
 				return function()
@@ -128,13 +180,15 @@ function FakeRoblox.newAnimator(defaultLength: number?): any
 	local animator = {
 		loadCount = 0,
 		tracks = {} :: { any },
+		animations = {} :: { any },
 		defaultLength = if defaultLength ~= nil then defaultLength else 10,
 	}
 
-	function animator:LoadAnimation(_animation): any
+	function animator:LoadAnimation(animation): any
 		self.loadCount += 1
 		local track = FakeRoblox.newTrack(self.defaultLength)
 		self.tracks[#self.tracks + 1] = track
+		self.animations[#self.animations + 1] = animation
 		return track
 	end
 

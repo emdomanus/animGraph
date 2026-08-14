@@ -1,6 +1,7 @@
 # Temporal Amendment
 
-**Status:** CP-TA1 is implemented, operator-reviewed, and committed. CP-TA2 has not started. The
+**Status:** CP-TA1 and CP-TA2 are implemented, operator-reviewed, and committed. CP-TA3 has not
+started. The
 sampled-reader timing amendment below remains the binding contract. Discussion of the complete
 per-layer delta-map shape is retained only as history of the superseded CP-TA1 draft.
 
@@ -599,6 +600,10 @@ lightweight post-cleanup tombstone.
 
 ### CP-TA2 -- live position and backend-neutral completion
 
+**Implementation status: complete, operator-reviewed, and committed.** The public contract, Roblox
+generation/tombstone lifecycle, deterministic seams, dev harness, and documentation are present in
+the CP-TA2 checkpoint. Studio-only engine observations and CP-TA3 remain unexecuted.
+
 One coherent commit:
 
 - add the one controller position operation, backend position/completion ports, canonical completion
@@ -822,7 +827,6 @@ There are no open design blockers for CP-TA1 or CP-TA2. The binding decisions ar
 12. Lune 0.8.9 is the deterministic runner. The checked-in loader smoke is a mandatory execution
      entrance gate before source work, not an unresolved design decision.
 
-The remaining gates are executable proof gates: CP-TA2 implementation and review, full
-static/docs/deterministic verification, Studio-only engine observations, and the later separate
-VoxelMMO migration proofs. The project-local Lune entrance gate and CP-TA1 operator review are
-complete.
+The remaining gates are CP-TA3 verification and consumer-readiness review, Studio-only engine
+observations, and the later separate VoxelMMO migration proofs. The project-local Lune entrance gate
+and CP-TA1/CP-TA2 implementation and operator review are complete.
