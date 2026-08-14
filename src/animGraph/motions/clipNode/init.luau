@@ -3,6 +3,7 @@
 --!native
 
 local Types = require(script.Parent.Parent.types.motions.clipNode)
+local AnimationPosition = require(script.Parent.Parent.utils.animationPosition)
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 
 export type ClipNodeConfig<LayerBackendT> = Types.ClipNodeConfig<LayerBackendT>
@@ -43,6 +44,10 @@ function ClipNode.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	clip: ClipT,
 	config: ClipNodeConfig<LayerBackendT>?
 ): ClipNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	if config ~= nil and config.initialPosition ~= nil then
+		AnimationPosition.assertValid(config.initialPosition)
+	end
+
 	local self: ClipNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 		setmetatable({}, ClipNode) :: any
 
@@ -54,8 +59,7 @@ function ClipNode.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._looped = if config ~= nil and config.looped ~= nil then config.looped else DEFAULT_LOOPED
 	self._logicalPriority = if config ~= nil then config.logicalPriority else nil
 	self._layerBackend = if config ~= nil then config.layerBackend else nil
-	self._timePosition = if config ~= nil then config.timePosition else nil
-	self._normalizedTime = if config ~= nil then config.normalizedTime else nil
+	self._initialPosition = if config ~= nil then config.initialPosition else nil
 
 	return self
 end
@@ -84,12 +88,10 @@ function ClipNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		clip = self._clip,
 		weight = optionNumber(if overrides ~= nil then overrides.weight else nil, self._weight),
 		speed = optionNumber(if overrides ~= nil then overrides.speed else nil, self._speed),
-		timePosition = if overrides ~= nil and overrides.timePosition ~= nil
-			then overrides.timePosition
-			else self._timePosition,
-		normalizedTime = if overrides ~= nil and overrides.normalizedTime ~= nil
-			then overrides.normalizedTime
-			else self._normalizedTime,
+		deltaTime = context.dt,
+		initialPosition = if overrides ~= nil and overrides.initialPosition ~= nil
+			then overrides.initialPosition
+			else self._initialPosition,
 		looped = optionBoolean(if overrides ~= nil then overrides.looped else nil, self._looped),
 		logicalPriority = optionNumber(
 			if overrides ~= nil and overrides.logicalPriority ~= nil

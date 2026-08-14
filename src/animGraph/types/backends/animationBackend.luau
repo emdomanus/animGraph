@@ -34,8 +34,7 @@ export type BackendDebugSnapshot = {
 export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
 	apply: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
-		requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> },
-		dt: number
+		requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
 	) -> (),
 	stopLayer: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,

@@ -2,6 +2,7 @@
 --!optimize 2
 --!native
 
+local DefTypes = require(script.Parent.Parent.def)
 local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
 
 export type LayerDefinition<LayerT, LayerBackendT> = {
@@ -12,12 +13,14 @@ export type LayerDefinition<LayerT, LayerBackendT> = {
 	layerBackend: LayerBackendT?,
 	defaultFadeIn: number?,
 	defaultFadeOut: number?,
+	logicalTimeReader: DefTypes.LogicalTimeReader?,
 }
 
 export type LayerPlayOptions<StateT, LayerBackendT> = MotionNodeTypes.MotionRequestOverrides<LayerBackendT> & {
 	state: StateT?,
 	fadeTime: number?,
 	fadeIn: number?,
+	logicalTimeReader: DefTypes.LogicalTimeReader?,
 }
 
 export type LayerDebugSnapshot<LayerT, StateT, LayerBackendT> = {
@@ -75,11 +78,25 @@ export type LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 		_layerBackend: LayerBackendT?,
 		_defaultFadeIn: number,
 		_defaultFadeOut: number,
+		_logicalTimeReader: DefTypes.LogicalTimeReader?,
 		_motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>?,
 		_state: StateT?,
 		_fadeTime: number,
 		_overrides: MotionNodeTypes.MotionRequestOverrides<LayerBackendT>?,
+		_playLogicalTimeReader: DefTypes.LogicalTimeReader?,
+		_lastLogicalTime: number?,
 		_playing: boolean,
+		_selectLogicalTimeReader: (
+			self: LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+			defaultReader: DefTypes.LogicalTimeReader
+		) -> DefTypes.LogicalTimeReader?,
+		_getLogicalTimeBaseline: (
+			self: LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+		) -> number?,
+		_commitLogicalTimeSample: (
+			self: LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+			position: number
+		) -> (),
 	}
 
 return {}

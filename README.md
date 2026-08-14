@@ -13,8 +13,10 @@ The current implementation provides the authored controller slice:
 - authored state machines with trigger/parameter transition conditions;
 - controller events for state enter/exit and transition start/end;
 - controller parameters (`float`, `bool`, trigger, and raw values);
+- coherent once-per-update sampling with controller, layer, and active-play logical readers;
+- validated one-shot initial positions in seconds or normalized form;
 - a Roblox `Animator` backend that drives `AnimationTrack` weight, speed, and
-  priority;
+  priority without redundant unchanged operations;
 - debug snapshots for controller, layers, parameters, and backend tracks.
 
 The public API intentionally talks in layers, states, parameters, clips, motion
@@ -34,6 +36,7 @@ The package entrypoint is `src/init.luau`, which re-exports `src/animGraph`.
 
 ```luau
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local AnimGraph = require(ReplicatedStorage.packages.animGraph)
 
@@ -52,6 +55,10 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
+	timeSource = os.clock,
+	logicalTimeReader = function(frameNow: number): number
+		return frameNow
+	end,
 	layers = {
 		{
 			id = "base",
@@ -104,25 +111,27 @@ controller:play("action", AnimGraph.stateMachine({
 controller:setFloat("speed", 4)
 controller:setTrigger("attack")
 
-local releaseUpdate = controller:bindToPreAnimation()
+local updateConnection = RunService.PreAnimation:Connect(function()
+	controller:update()
+end)
 
 -- later
-releaseUpdate()
+updateConnection:Disconnect()
 controller:destroy()
 ```
 
-You can also drive updates manually:
+You can also drive updates from another caller-owned deterministic cadence:
 
 ```luau
-controller:update(deltaTime)
+controller:update()
 ```
 
 ## Concepts
 
 - A layer is a caller-owned logical animation lane, such as `"base"`,
   `"upperBody"`, `"action"`, or a typed enum.
-- A state is an authored/debug identity for the motion currently playing on a
-  layer. Full transition/state-machine support will build on this.
+- A state is an authored/debug identity used by the package's authored
+  state-machine and transition runtime.
 - A clip is the caller's animation identity. It can be a string key, numeric
   asset id, enum value, or another stable key.
 - A motion node evaluates to one or more clip requests. The package ships
@@ -131,6 +140,10 @@ controller:update(deltaTime)
   normal parameters or consume trigger parameters.
 - A backend receives clip requests and applies them to an animation runtime.
   The shipped backend uses Roblox `Animator` and `AnimationTrack`.
+- Each update samples one finite `TimeSource` coordinate and each distinct
+  selected `LogicalTimeReader` at most once. Play readers replace layer readers,
+  which replace the controller default.
+- Reader-derived logical delta and request speed remain independent inputs.
 - Logical priorities are numeric and backend-neutral. The Roblox backend maps
   them onto Roblox's limited `Enum.AnimationPriority` tiers unless a request
   carries Roblox layer backend data with an explicit `robloxPriority`.
@@ -144,9 +157,15 @@ The Roblox backend applies each evaluated clip request by setting:
 
 - `AnimationTrack.Priority`;
 - `AnimationTrack.Looped`;
-- `AnimationTrack:AdjustWeight(weight, fadeTime)`;
-- `AnimationTrack:AdjustSpeed(speed)`;
-- `AnimationTrack.TimePosition` when requested.
+- `AnimationTrack:AdjustWeight(weight, fadeTime)` only when the effective target changes;
+- `AnimationTrack:AdjustSpeed(speed)` only when the effective speed changes;
+- `AnimationTrack.TimePosition` once per materialized generation when an
+  `initialPosition` resolves against a positive length.
+
+Repeated application of the same live request does not replay, reposition, or
+restart an unchanged fade. Non-looping terminal initial positions are clamped
+and internally latched so the same materialization cannot replay. Looping
+seconds wrap by length, and normalized `1` canonicalizes to zero.
 
 It maps logical priority bands like this by default:
 
@@ -199,31 +218,28 @@ Controller methods:
 - `controller:setTrigger(parameter)`
 - `controller:consumeTrigger(parameter) -> boolean`
 - `controller:on(eventName, callback) -> release`
-- `controller:update(deltaTime)`
-- `controller:bindToPreAnimation() -> release`
+- `controller:update()`
 - `controller:getDebugSnapshot()`
 - `controller:clear()`
 - `controller:destroy()`
 
 ## Next Slices
 
-The next implementation slices should be:
-
-1. Roblox animation marker forwarding through the controller event bus.
-2. Transition interruption policy and exit-time conditions.
-3. Optional layer masks/per-joint blend metadata for a custom solver backend.
-4. Optional Crunchyroll/custom pose-solver backend.
-5. Focused tests around blend weights, transition conditions, and backend
-   request application.
+Future work is tracked in the checkpointed
+[temporal amendment](docs/todo/temporalAmendment.md) and
+[backlog](docs/todo/backlog.md). CP-TA1 intentionally does not expose live track
+positioning or completion lifecycle APIs.
 
 ## Development
 
-Run static and formatting checks when the local tools are available:
+Run the deterministic, formatting, lint, type, and documentation checks from
+the repository root:
 
 ```sh
-selene src
-stylua --check src
-rojo sourcemap default.project.json --output sourcemap.json
+lune run tests/lune/run.luau
+stylua --check src dev tests
+selene src dev tests
+npm run docs:build
 ```
 
 For Roblox-aware Luau analysis and Rojo require graph validation:

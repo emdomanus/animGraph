@@ -4,6 +4,8 @@
 
 local MotionNodeTypes = require(script.Parent.Parent.Parent.types.motions.motionNode)
 local RobloxAnimatorBackendTypes = require(script.Parent.Parent.Parent.types.backends.robloxAnimatorBackend)
+local AnimationPosition = require(script.Parent.Parent.Parent.utils.animationPosition)
+local DefTypes = require(script.Parent.Parent.Parent.types.def)
 
 export type AssetId = number
 export type RobloxLayerBackend = RobloxAnimatorBackendTypes.RobloxLayerBackend
@@ -21,6 +23,7 @@ export type AnimPlayback<LayerT, StateT, ClipT> = {
 		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 		robloxPriority: Enum.AnimationPriority
 	) -> (),
+	markAbsent: (self: AnimPlayback<LayerT, StateT, ClipT>) -> (),
 	fadeToZero: (self: AnimPlayback<LayerT, StateT, ClipT>, fadeTime: number) -> (),
 	isPlaying: (self: AnimPlayback<LayerT, StateT, ClipT>) -> boolean,
 	getTrack: (self: AnimPlayback<LayerT, StateT, ClipT>) -> AnimationTrack,
@@ -37,6 +40,13 @@ export type AnimPlaybackImpl<LayerT, StateT, ClipT> = AnimPlayback<LayerT, State
 	_track: AnimationTrack,
 	_weight: number,
 	_speed: number,
+	_looped: boolean,
+	_priority: Enum.AnimationPriority?,
+	_started: boolean,
+	_completed: boolean,
+	_requestedLastApply: boolean,
+	_pendingInitialPosition: DefTypes.AnimationPosition?,
+	_generation: number,
 	_destroyed: boolean,
 }
 
@@ -59,9 +69,80 @@ function AnimPlayback.new<LayerT, StateT, ClipT>(
 	self._track = track
 	self._weight = 0
 	self._speed = 1
+	self._looped = false
+	self._priority = nil
+	self._started = false
+	self._completed = false
+	self._requestedLastApply = false
+	self._pendingInitialPosition = nil
+	self._generation = 0
 	self._destroyed = false
 
 	return self
+end
+
+local function copyPosition(
+	position: DefTypes.AnimationPosition?
+): DefTypes.AnimationPosition?
+	if position == nil then
+		return nil
+	end
+
+	if position.kind == "seconds" then
+		return { kind = "seconds", value = position.value }
+	end
+
+	return { kind = "normalized", value = position.value }
+end
+
+local function applyPendingInitialPosition<LayerT, StateT, ClipT>(
+	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
+): ()
+	local pending = self._pendingInitialPosition
+	if pending == nil or self._completed then
+		return
+	end
+
+	local length = self._track.Length
+	if length <= 0 then
+		return
+	end
+
+	local resolvedSeconds, completed = AnimationPosition.resolve(pending, length, self._looped)
+	self._pendingInitialPosition = nil
+	self._track.TimePosition = resolvedSeconds
+	if completed then
+		self._completed = true
+	end
+end
+
+local function startGeneration<LayerT, StateT, ClipT>(
+	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
+	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
+	robloxPriority: Enum.AnimationPriority
+): ()
+	local track = self._track
+	local restarting = self._started
+	if restarting and track.IsPlaying then
+		track:Stop(0)
+	end
+
+	self._generation += 1
+	self._completed = false
+	self._pendingInitialPosition = copyPosition(request.initialPosition)
+	self._weight = math.max(request.weight, 0)
+	self._speed = request.speed
+	self._looped = request.looped
+	self._priority = robloxPriority
+	track.Looped = request.looped
+	track.Priority = robloxPriority
+	track:Play(request.fadeTime, self._weight, self._speed)
+	self._started = true
+
+	if restarting and request.initialPosition == nil then
+		track.TimePosition = 0
+	end
+	applyPendingInitialPosition(self)
 end
 
 function AnimPlayback.apply<LayerT, StateT, ClipT>(
@@ -74,33 +155,54 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 	end
 
 	local track = self._track
-	self._weight = math.max(request.weight, 0)
-	self._speed = request.speed
+	local wasRequested = self._requestedLastApply
+	self._requestedLastApply = true
 
-	track.Looped = request.looped
-	track.Priority = robloxPriority
-
-	if track.IsPlaying then
-		track:AdjustWeight(self._weight, request.fadeTime)
-		track:AdjustSpeed(self._speed)
-	else
-		track:Play(request.fadeTime, self._weight, self._speed)
+	if self._started and not self._completed and not self._looped and not track.IsPlaying then
+		self._completed = true
 	end
 
-	if request.normalizedTime ~= nil and track.Length > 0 then
-		track.TimePosition = math.max(request.normalizedTime, 0) * track.Length
-	elseif request.timePosition ~= nil then
-		track.TimePosition = math.max(request.timePosition, 0)
-	elseif request.forceRestart then
-		track.TimePosition = 0
+	if not self._started or request.forceRestart or (self._completed and not wasRequested) then
+		startGeneration(self, request, robloxPriority)
+		return
 	end
+
+	if self._completed then
+		return
+	end
+
+	local weight = math.max(request.weight, 0)
+	if request.looped ~= self._looped then
+		self._looped = request.looped
+		track.Looped = request.looped
+	end
+	if robloxPriority ~= self._priority then
+		self._priority = robloxPriority
+		track.Priority = robloxPriority
+	end
+	if weight ~= self._weight then
+		self._weight = weight
+		track:AdjustWeight(weight, request.fadeTime)
+	end
+	if request.speed ~= self._speed then
+		self._speed = request.speed
+		track:AdjustSpeed(request.speed)
+	end
+
+	applyPendingInitialPosition(self)
+end
+
+function AnimPlayback.markAbsent<LayerT, StateT, ClipT>(
+	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
+): ()
+	self._requestedLastApply = false
 end
 
 function AnimPlayback.fadeToZero<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
 	fadeTime: number
 ): ()
-	if self._destroyed or not self._track.IsPlaying then
+	if self._destroyed or self._completed or not self._track.IsPlaying or self._weight == 0 then
 		return
 	end
 
@@ -111,7 +213,7 @@ end
 function AnimPlayback.isPlaying<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
 ): boolean
-	return not self._destroyed and self._track.IsPlaying
+	return not self._destroyed and not self._completed and self._track.IsPlaying
 end
 
 function AnimPlayback.getTrack<LayerT, StateT, ClipT>(

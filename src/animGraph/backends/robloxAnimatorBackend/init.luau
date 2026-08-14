@@ -3,6 +3,7 @@
 --!native
 
 local AnimPlayback = require(script.animPlayback)
+local RequestValidation = require(script.Parent.Parent.utils.requestValidation)
 local Types = require(script.Parent.Parent.types.backends.robloxAnimatorBackend)
 local BackendTypes = require(script.Parent.Parent.types.backends.animationBackend)
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
@@ -132,15 +133,13 @@ end
 
 function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
-	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend> },
-	dt: number
+	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend> }
 ): ()
 	if self._destroyed then
 		return
 	end
 
-	local _dt = dt
-	self._warnings = {}
+	RequestValidation.validate(requests)
 	local touched: { [string]: true } = {}
 
 	for _, request in requests do
@@ -164,6 +163,7 @@ function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 
 	for trackKey, playback in self._playbacks do
 		if not touched[trackKey] then
+			playback:markAbsent()
 			playback:fadeToZero(self._defaultFadeOut)
 			local state = self._trackStates[trackKey]
 			if state ~= nil then

@@ -2,6 +2,8 @@
 --!optimize 2
 --!native
 
+local DefTypes = require(script.Parent.Parent.def)
+
 export type MotionRequestOverrides<LayerBackendT> = {
 	trackKey: string?,
 	weight: number?,
@@ -9,8 +11,7 @@ export type MotionRequestOverrides<LayerBackendT> = {
 	looped: boolean?,
 	logicalPriority: number?,
 	layerBackend: LayerBackendT?,
-	timePosition: number?,
-	normalizedTime: number?,
+	initialPosition: DefTypes.AnimationPosition?,
 	forceRestart: boolean?,
 }
 
@@ -36,8 +37,8 @@ export type ClipRequest<LayerT, StateT, ClipT, LayerBackendT> = {
 	clip: ClipT,
 	weight: number,
 	speed: number,
-	timePosition: number?,
-	normalizedTime: number?,
+	deltaTime: number,
+	initialPosition: DefTypes.AnimationPosition?,
 	looped: boolean,
 	logicalPriority: number,
 	layerBackend: LayerBackendT?,

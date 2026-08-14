@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- Replaced the controller-wide delta argument with caller-scheduled `update()` that
+  samples one `TimeSource` coordinate and selected play/layer/default
+  `LogicalTimeReader` functions, derives per-activation deltas, and adds
+  request-local `deltaTime`.
+- Removed the controller-owned frame-binding helper; callers now own update scheduling. Non-finite or
+  backward samples reject atomically while first, held, and exact-forward
+  samples use the documented baseline behavior.
+- Added canonical `AnimationPosition`, `TimeSource`, and `LogicalTimeReader`
+  declarations under `types/def`, moved implementation helpers under `utils`,
+  and deleted the superseded public delta-map surface completely.
+- Replaced the two legacy numeric position fields with the canonical, validated
+  `AnimationPosition` union and one-shot `initialPosition`.
+- Made Roblox backend apply idempotent for unchanged live generations, added
+  pending-length resolution and exact looping/non-looping boundaries, and
+  retained an internal completed-materialization latch that prevents replay.
+- Added duplicate request-key rejection before backend mutation and executable
+  Lune coverage for the CP-TA1 timing and initial-position contract.
+- Reorganized documentation into architecture, guides, filesystem-aligned API,
+  shared types, consumer research, and engineering TODO sections.
+
 ## 0.1.0
 
 - Replaced the category mixer API with the first `AnimationController` vertical

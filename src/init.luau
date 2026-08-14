@@ -7,6 +7,9 @@ local Types = require(script.animGraph.types)
 
 export type Release = Types.Release
 export type AssetId = Types.AssetId
+export type AnimationPosition = Types.AnimationPosition
+export type TimeSource = Types.TimeSource
+export type LogicalTimeReader = Types.LogicalTimeReader
 export type ParameterValue = Types.ParameterValue
 export type AnimationEventName = Types.AnimationEventName
 export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT>

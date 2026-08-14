@@ -3,6 +3,7 @@
 --!native
 
 local AnimationControllerTypes = require(script.controller.animationController)
+local DefTypes = require(script.def)
 local EventBusTypes = require(script.controller.eventBus)
 local ParameterStoreTypes = require(script.controller.parameterStore)
 local LayerRuntimeTypes = require(script.runtime.layerRuntime)
@@ -15,6 +16,10 @@ local Blend2DNodeTypes = require(script.motions.blend2DNode)
 local AnimationBackendTypes = require(script.backends.animationBackend)
 local RobloxAnimatorBackendTypes = require(script.backends.robloxAnimatorBackend)
 local StackModifierTypes = require(script.components.stackModifier)
+
+export type AnimationPosition = DefTypes.AnimationPosition
+export type TimeSource = DefTypes.TimeSource
+export type LogicalTimeReader = DefTypes.LogicalTimeReader
 
 export type ParameterValue = ParameterStoreTypes.ParameterValue
 export type ParameterStore<ParamT> = ParameterStoreTypes.ParameterStore<ParamT>

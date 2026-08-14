@@ -3,6 +3,7 @@
 --!native
 
 local MotionNodeTypes = require(script.Parent.motionNode)
+local DefTypes = require(script.Parent.Parent.def)
 
 export type ClipNodeConfig<LayerBackendT> = {
 	name: string?,
@@ -12,8 +13,7 @@ export type ClipNodeConfig<LayerBackendT> = {
 	looped: boolean?,
 	logicalPriority: number?,
 	layerBackend: LayerBackendT?,
-	timePosition: number?,
-	normalizedTime: number?,
+	initialPosition: DefTypes.AnimationPosition?,
 }
 
 export type ClipNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> = MotionNodeTypes.MotionNode<
@@ -34,8 +34,7 @@ export type ClipNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 		_looped: boolean,
 		_logicalPriority: number?,
 		_layerBackend: LayerBackendT?,
-		_timePosition: number?,
-		_normalizedTime: number?,
+		_initialPosition: DefTypes.AnimationPosition?,
 	}
 
 return {}

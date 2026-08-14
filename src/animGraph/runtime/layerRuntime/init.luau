@@ -3,6 +3,8 @@
 --!native
 
 local Types = require(script.Parent.Parent.types.runtime.layerRuntime)
+local AnimationPosition = require(script.Parent.Parent.utils.animationPosition)
+local DefTypes = require(script.Parent.Parent.types.def)
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 
 export type LayerDefinition<LayerT, LayerBackendT> = Types.LayerDefinition<LayerT, LayerBackendT>
@@ -53,8 +55,7 @@ local function copyOverrides<StateT, LayerBackendT>(
 		looped = options.looped,
 		logicalPriority = options.logicalPriority,
 		layerBackend = options.layerBackend,
-		timePosition = options.timePosition,
-		normalizedTime = options.normalizedTime,
+		initialPosition = options.initialPosition,
 		forceRestart = options.forceRestart,
 	}
 end
@@ -65,6 +66,10 @@ LayerRuntime.__index = LayerRuntime
 function LayerRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	definition: LayerDefinition<LayerT, LayerBackendT>
 ): LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	if definition.logicalTimeReader ~= nil then
+		assert(typeof(definition.logicalTimeReader) == "function", "logicalTimeReader must be a function")
+	end
+
 	local self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 		setmetatable({}, LayerRuntime) :: any
 
@@ -78,10 +83,13 @@ function LayerRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		optionNumber(definition.defaultFadeOut, DEFAULT_FADE_OUT),
 		"defaultFadeOut"
 	)
+	self._logicalTimeReader = definition.logicalTimeReader
 	self._motion = nil
 	self._state = nil
 	self._fadeTime = self._defaultFadeIn
 	self._overrides = nil
+	self._playLogicalTimeReader = nil
+	self._lastLogicalTime = nil
 	self._playing = false
 
 	return self
@@ -98,6 +106,13 @@ function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	options: LayerPlayOptions<StateT, LayerBackendT>?
 ): ()
+	if options ~= nil and options.initialPosition ~= nil then
+		AnimationPosition.assertValid(options.initialPosition)
+	end
+	if options ~= nil and options.logicalTimeReader ~= nil then
+		assert(typeof(options.logicalTimeReader) == "function", "logicalTimeReader must be a function")
+	end
+
 	self._motion = motion
 	self._state = if options ~= nil then options.state else nil
 	self._fadeTime = assertNonNegative(
@@ -107,6 +122,8 @@ function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		"fadeTime"
 	)
 	self._overrides = copyOverrides(options)
+	self._playLogicalTimeReader = if options ~= nil then options.logicalTimeReader else nil
+	self._lastLogicalTime = nil
 	self._playing = true
 end
 
@@ -116,7 +133,33 @@ function LayerRuntime.stop<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._motion = nil
 	self._state = nil
 	self._overrides = nil
+	self._playLogicalTimeReader = nil
+	self._lastLogicalTime = nil
 	self._playing = false
+end
+
+function LayerRuntime._selectLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	defaultReader: DefTypes.LogicalTimeReader
+): DefTypes.LogicalTimeReader?
+	if not self._playing then
+		return nil
+	end
+
+	return self._playLogicalTimeReader or self._logicalTimeReader or defaultReader
+end
+
+function LayerRuntime._getLogicalTimeBaseline<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+): number?
+	return self._lastLogicalTime
+end
+
+function LayerRuntime._commitLogicalTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	position: number
+): ()
+	self._lastLogicalTime = position
 end
 
 function LayerRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
@@ -150,10 +193,12 @@ function LayerRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	for _, request in requests do
 		request.weight *= self._weight
 		request.speed *= self._speed
+		request.deltaTime = dt
 	end
 
 	local overrides = self._overrides
-	if overrides ~= nil and overrides.forceRestart then
+	if overrides ~= nil and #requests > 0 then
+		overrides.initialPosition = nil
 		overrides.forceRestart = false
 	end
 

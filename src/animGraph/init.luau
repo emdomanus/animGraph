@@ -12,6 +12,9 @@ local StateMachineRuntime = require(script.runtime.stateMachineRuntime)
 local StackModifier = require(script.components.stackModifier)
 
 export type ParameterValue = Types.ParameterValue
+export type AnimationPosition = Types.AnimationPosition
+export type TimeSource = Types.TimeSource
+export type LogicalTimeReader = Types.LogicalTimeReader
 export type AnimationEventName = Types.AnimationEventName
 export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT>
 export type AnimationEventCallback<LayerT, StateT> = Types.AnimationEventCallback<LayerT, StateT>

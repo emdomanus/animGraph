@@ -2,12 +2,13 @@
 --!optimize 2
 --!native
 
-local RunService = game:GetService("RunService")
-
+local AnimationPosition = require(script.Parent.Parent.utils.animationPosition)
 local EventBus = require(script.eventBus)
 local LayerRuntime = require(script.Parent.Parent.runtime.layerRuntime)
 local ParameterStore = require(script.parameterStore)
+local RequestValidation = require(script.Parent.Parent.utils.requestValidation)
 local Types = require(script.Parent.Parent.types.controller.animationController)
+local DefTypes = require(script.Parent.Parent.types.def)
 local EventBusTypes = require(script.Parent.Parent.types.controller.eventBus)
 local LayerRuntimeTypes = require(script.Parent.Parent.types.runtime.layerRuntime)
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
@@ -22,23 +23,38 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	Types.AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 
+type PreparedLogicalSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
+	layerRuntime: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	position: number,
+}
+
 local AnimationController = {}
 AnimationController.__index = AnimationController
+
+local function assertFiniteTime(value: number, name: string): number
+	assert(typeof(value) == "number", name .. " must be a number")
+	assert(value == value and value > -math.huge and value < math.huge, name .. " must be finite")
+	return value
+end
 
 function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	config: AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 ): AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	assert(typeof(config.timeSource) == "function", "timeSource must be a function")
+	assert(typeof(config.logicalTimeReader) == "function", "logicalTimeReader must be a function")
+
 	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = setmetatable(
 		{},
 		AnimationController
 	) :: any
 
 	self._backend = config.backend
+	self._timeSource = config.timeSource
+	self._logicalTimeReader = config.logicalTimeReader
 	self._layers = {}
 	self._layerOrder = {}
 	self._parameters = ParameterStore.new() :: any
 	self._eventBus = EventBus.new() :: any
-	self._updateConnection = nil
 	self._destroyed = false
 
 	if config.layers ~= nil then
@@ -80,6 +96,9 @@ function AnimationController.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 
 	local layerRuntime = self._layers[layer]
 	assert(layerRuntime ~= nil, "unknown layer")
+	if options ~= nil and options.initialPosition ~= nil then
+		AnimationPosition.assertValid(options.initialPosition)
+	end
 
 	layerRuntime:play(motion, options)
 end
@@ -248,11 +267,47 @@ function AnimationController.on<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	dt: number
+	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 ): ()
 	if self._destroyed then
 		return
+	end
+
+	local frameNow = assertFiniteTime(self._timeSource(), "timeSource result")
+	local readerSamples: { [DefTypes.LogicalTimeReader]: number } = {}
+	local logicalDeltasByLayer: { [LayerT]: number } = {}
+	local preparedSamples: { PreparedLogicalSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> } = {}
+
+	for _, layer in self._layerOrder do
+		local layerRuntime = self._layers[layer]
+		if layerRuntime ~= nil then
+			local reader = layerRuntime:_selectLogicalTimeReader(self._logicalTimeReader)
+			if reader ~= nil then
+				local position = readerSamples[reader]
+				if position == nil then
+					position = assertFiniteTime(reader(frameNow), "logicalTimeReader result")
+					readerSamples[reader] = position
+				end
+
+				local baseline = layerRuntime:_getLogicalTimeBaseline()
+				assert(
+					baseline == nil or position >= baseline,
+					"logicalTimeReader moved backward for layer " .. tostring(layer)
+				)
+				local deltaTime = if baseline == nil
+					then 0
+					else assertFiniteTime(position - baseline, "logical time delta")
+				logicalDeltasByLayer[layer] = deltaTime
+				preparedSamples[#preparedSamples + 1] = {
+					layerRuntime = layerRuntime,
+					position = position,
+				}
+			end
+		end
+	end
+
+	for _, prepared in preparedSamples do
+		prepared.layerRuntime:_commitLogicalTimeSample(prepared.position)
 	end
 
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
@@ -269,40 +324,19 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]
 		if layerRuntime ~= nil then
-			local layerRequests = layerRuntime:evaluate(dt, getParameter, consumeTrigger, emitEvent)
+			local deltaTime = logicalDeltasByLayer[layer]
+			if deltaTime == nil then
+				deltaTime = 0
+			end
+			local layerRequests = layerRuntime:evaluate(deltaTime, getParameter, consumeTrigger, emitEvent)
 			for _, request in layerRequests do
 				requests[#requests + 1] = request
 			end
 		end
 	end
 
-	self._backend:apply(requests, dt)
-end
-
-function AnimationController.bindToPreAnimation<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): () -> ()
-	if self._updateConnection ~= nil then
-		self._updateConnection:Disconnect()
-	end
-
-	self._updateConnection = RunService.PreAnimation:Connect(function(deltaTimeSim)
-		self:update(deltaTimeSim)
-	end)
-
-	local released = false
-	return function()
-		if released then
-			return
-		end
-		released = true
-
-		local connection = self._updateConnection
-		if connection ~= nil then
-			connection:Disconnect()
-			self._updateConnection = nil
-		end
-	end
+	RequestValidation.validate(requests)
+	self._backend:apply(requests)
 end
 
 function AnimationController.clear<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
@@ -324,12 +358,6 @@ function AnimationController.destroy<LayerT, StateT, ParamT, ClipT, LayerBackend
 	end
 
 	self._destroyed = true
-	local connection = self._updateConnection
-	if connection ~= nil then
-		connection:Disconnect()
-		self._updateConnection = nil
-	end
-
 	self:clear()
 	self._eventBus:clear()
 	self._backend:destroy()

@@ -1529,6 +1529,10 @@ local function setupController(animator: Animator): ()
 
 	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 		backend = backend,
+		timeSource = os.clock,
+		logicalTimeReader = function(frameNow: number): number
+			return frameNow
+		end,
 		layers = layerDefinitions,
 	}
 
@@ -1558,7 +1562,12 @@ local function setupController(animator: Animator): ()
 
 	replayControllerGraphs()
 
-	releaseUpdate = activeController:bindToPreAnimation()
+	local updateConnection = RunService.PreAnimation:Connect(function()
+		activeController:update()
+	end)
+	releaseUpdate = function()
+		updateConnection:Disconnect()
+	end
 	updateSummary()
 end
 
@@ -1599,7 +1608,7 @@ local ok, err = pcall(function()
 	local dummy, animator = createDummy()
 	setupCamera(dummy)
 	setupController(animator)
-	appendLog("Spawned R6 dummy and bound controller updates to PreAnimation.")
+	appendLog("Spawned R6 dummy and sampled logical readers from PreAnimation.")
 end)
 
 if not ok then

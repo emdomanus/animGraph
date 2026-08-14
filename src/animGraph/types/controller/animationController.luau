@@ -3,6 +3,7 @@
 --!native
 
 local BackendTypes = require(script.Parent.Parent.backends.animationBackend)
+local DefTypes = require(script.Parent.Parent.def)
 local EventBusTypes = require(script.Parent.eventBus)
 local LayerRuntimeTypes = require(script.Parent.Parent.runtime.layerRuntime)
 local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
@@ -10,6 +11,8 @@ local ParameterStoreTypes = require(script.Parent.parameterStore)
 
 export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+	timeSource: DefTypes.TimeSource,
+	logicalTimeReader: DefTypes.LogicalTimeReader,
 	layers: { LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT> }?,
 }
 
@@ -113,8 +116,7 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 		callback: EventBusTypes.AnimationEventCallback<LayerT, StateT>
 	) -> EventBusTypes.Release,
 
-	update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, dt: number) -> (),
-	bindToPreAnimation: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> () -> (),
+	update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
 	clear: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
 	destroy: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
 	getDebugSnapshot: (
@@ -125,11 +127,12 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> & {
 		_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		_timeSource: DefTypes.TimeSource,
+		_logicalTimeReader: DefTypes.LogicalTimeReader,
 		_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
 		_layerOrder: { LayerT },
 		_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
 		_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
-		_updateConnection: RBXScriptConnection?,
 		_destroyed: boolean,
 	}
 
