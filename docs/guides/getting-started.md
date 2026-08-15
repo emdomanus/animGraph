@@ -1,6 +1,6 @@
 # Getting Started
 
-Construct a backend, provide one sampling coordinate and one default logical
+Construct a backend, provide one time source and one default logical-position
 reader, declare layers, and schedule `update()` from caller-owned code.
 
 ```luau
@@ -25,8 +25,8 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
 	timeSource = os.clock,
-	logicalTimeReader = function(frameNow: number): number
-		return frameNow
+	logicalPositionReader = function(time: number): number
+		return time
 	end,
 	layers = {
 		{ id = "base", logicalPriority = 0 },
@@ -55,13 +55,14 @@ updateConnection:Disconnect()
 controller:destroy()
 ```
 
-`frameNow` is a shared sampling coordinate, not an AnimGraph clock. A consumer
-may replace the default reader on a layer definition or one active play:
+`time` is the one shared time sampled for the update, not an AnimGraph clock or
+timescale. A consumer may replace the default reader on a layer definition or
+one active play:
 
 ```luau
 controller:play("action", AnimGraph.clip("slash"), {
 	state = "attack",
-	logicalTimeReader = actionReader,
+	logicalPositionReader = actionReader,
 })
 ```
 

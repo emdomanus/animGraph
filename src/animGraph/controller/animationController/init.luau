@@ -23,7 +23,7 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	Types.AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 
-type PreparedLogicalSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
+type PreparedLogicalPosition<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	layerRuntime: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	position: number,
 }
@@ -31,7 +31,7 @@ type PreparedLogicalSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 local AnimationController = {}
 AnimationController.__index = AnimationController
 
-local function assertFiniteTime(value: number, name: string): number
+local function assertFiniteNumber(value: number, name: string): number
 	assert(typeof(value) == "number", name .. " must be a number")
 	assert(value == value and value > -math.huge and value < math.huge, name .. " must be finite")
 	return value
@@ -41,7 +41,7 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	config: AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 ): AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 	assert(typeof(config.timeSource) == "function", "timeSource must be a function")
-	assert(typeof(config.logicalTimeReader) == "function", "logicalTimeReader must be a function")
+	assert(typeof(config.logicalPositionReader) == "function", "logicalPositionReader must be a function")
 
 	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = setmetatable(
 		{},
@@ -50,7 +50,7 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 
 	self._backend = config.backend
 	self._timeSource = config.timeSource
-	self._logicalTimeReader = config.logicalTimeReader
+	self._logicalPositionReader = config.logicalPositionReader
 	self._layers = {}
 	self._layerOrder = {}
 	self._parameters = ParameterStore.new() :: any
@@ -291,32 +291,32 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 		return
 	end
 
-	local frameNow = assertFiniteTime(self._timeSource(), "timeSource result")
-	local readerSamples: { [DefTypes.LogicalTimeReader]: number } = {}
+	local sampleTime = assertFiniteNumber(self._timeSource(), "timeSource result")
+	local positionsByReader: { [DefTypes.LogicalPositionReader]: number } = {}
 	local logicalDeltasByLayer: { [LayerT]: number } = {}
-	local preparedSamples: { PreparedLogicalSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> } = {}
+	local preparedPositions: { PreparedLogicalPosition<LayerT, StateT, ParamT, ClipT, LayerBackendT> } = {}
 
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]
 		if layerRuntime ~= nil then
-			local reader = layerRuntime:_selectLogicalTimeReader(self._logicalTimeReader)
+			local reader = layerRuntime:_selectLogicalPositionReader(self._logicalPositionReader)
 			if reader ~= nil then
-				local position = readerSamples[reader]
+				local position = positionsByReader[reader]
 				if position == nil then
-					position = assertFiniteTime(reader(frameNow), "logicalTimeReader result")
-					readerSamples[reader] = position
+					position = assertFiniteNumber(reader(sampleTime), "logicalPositionReader result")
+					positionsByReader[reader] = position
 				end
 
-				local baseline = layerRuntime:_getLogicalTimeBaseline()
+				local baseline = layerRuntime:_getLogicalPositionBaseline()
 				assert(
 					baseline == nil or position >= baseline,
-					"logicalTimeReader moved backward for layer " .. tostring(layer)
+					"logicalPositionReader moved backward for layer " .. tostring(layer)
 				)
 				local deltaTime = if baseline == nil
 					then 0
-					else assertFiniteTime(position - baseline, "logical time delta")
+					else assertFiniteNumber(position - baseline, "logical time delta")
 				logicalDeltasByLayer[layer] = deltaTime
-				preparedSamples[#preparedSamples + 1] = {
+				preparedPositions[#preparedPositions + 1] = {
 					layerRuntime = layerRuntime,
 					position = position,
 				}
@@ -324,8 +324,8 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 		end
 	end
 
-	for _, prepared in preparedSamples do
-		prepared.layerRuntime:_commitLogicalTimeSample(prepared.position)
+	for _, prepared in preparedPositions do
+		prepared.layerRuntime:_commitLogicalPositionSample(prepared.position)
 	end
 
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}

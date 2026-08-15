@@ -9,26 +9,26 @@ Create a controller with `AnimGraph.new(config)` or
 local controller = AnimGraph.new({
 	backend = backend,
 	timeSource = timeSource,
-	logicalTimeReader = defaultReader,
+	logicalPositionReader = defaultReader,
 	layers = layerDefinitions,
 })
 ```
 
-`backend`, `timeSource`, and `logicalTimeReader` are required. `layers` is
+`backend`, `timeSource`, and `logicalPositionReader` are required. `layers` is
 optional because layers may be added later.
 
 ## Timing Contract
 
 `controller:update()` takes no arguments. It samples `timeSource` exactly once,
-passes the finite result to each distinct selected logical reader at most once,
-preflights every selected sample, derives per-activation deltas, evaluates the
-graph, and applies the resulting request batch.
+passes that finite time to each distinct selected logical-position reader at
+most once, preflights every returned position, derives per-activation deltas,
+evaluates the graph, and applies the resulting request batch.
 
 Reader precedence is:
 
-1. active `LayerPlayOptions.logicalTimeReader`;
-2. `LayerDefinition.logicalTimeReader`;
-3. `AnimationControllerConfig.logicalTimeReader`.
+1. active `LayerPlayOptions.logicalPositionReader`;
+2. `LayerDefinition.logicalPositionReader`;
+3. `AnimationControllerConfig.logicalPositionReader`.
 
 Starting any replacement play establishes a fresh baseline. The first sample is
 zero; equal positions remain zero; forward positions use their exact finite
@@ -62,7 +62,7 @@ end)
 - `destroy()`
 
 `LayerPlayOptions.initialPosition` and `forceRestart` are one-shot request
-commands consumed after the play first emits requests. `logicalTimeReader`
+commands consumed after the play first emits requests. `logicalPositionReader`
 persists for the whole active play.
 
 ## Live Position and Completion

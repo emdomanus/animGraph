@@ -58,8 +58,8 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
 	timeSource = os.clock,
-	logicalTimeReader = function(frameNow: number): number
-		return frameNow
+	logicalPositionReader = function(time: number): number
+		return time
 	end,
 	layers = {
 		{
@@ -153,9 +153,9 @@ controller:update()
   The shipped backend uses Roblox `Animator` and `AnimationTrack`.
 - `trackKey` is the backend-neutral identity used for live positioning and
   completion; AnimGraph does not expose a playback handle or raw Roblox track.
-- Each update samples one finite `TimeSource` coordinate and each distinct
-  selected `LogicalTimeReader` at most once. Play readers replace layer readers,
-  which replace the controller default.
+- Each update samples one finite `TimeSource` time and passes it to each distinct
+  selected `LogicalPositionReader` at most once. Play readers replace layer
+  readers, which replace the controller default.
 - Reader-derived logical delta and request speed remain independent inputs.
 - Logical priorities are numeric and backend-neutral. The Roblox backend maps
   them onto Roblox's limited `Enum.AnimationPriority` tiers unless a request

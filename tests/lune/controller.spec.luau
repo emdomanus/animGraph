@@ -158,23 +158,23 @@ local ok, result = pcall(function(): number
 
 	test("samples the source once and a shared reader once while applying every successful sample", function(): ()
 		local backend = newBackend()
-		local frameNow = 40
+		local sampleTime = 40
 		local logicalPosition = 5
 		local sourceCalls = 0
 		local readerCalls = 0
-		local observedFrameNow = nil
-		local sharedReader = function(sampleFrameNow: number): number
+		local observedSampleTime = nil
+		local sharedReader = function(time: number): number
 			readerCalls += 1
-			observedFrameNow = sampleFrameNow
+			observedSampleTime = time
 			return logicalPosition
 		end
 		local controller = AnimationController.new({
 			backend = backend,
 			timeSource = function(): number
 				sourceCalls += 1
-				return frameNow
+				return sampleTime
 			end,
-			logicalTimeReader = sharedReader,
+			logicalPositionReader = sharedReader,
 			layers = {
 				{ id = "base" },
 				{ id = "action" },
@@ -186,70 +186,70 @@ local ok, result = pcall(function(): number
 		controller:update()
 		assert(sourceCalls == 1, "timeSource was not sampled exactly once")
 		assert(readerCalls == 1, "shared reader was not sampled exactly once")
-		assert(observedFrameNow == 40, "reader did not receive the sampled frameNow")
+		assert(observedSampleTime == 40, "reader did not receive the sampled time")
 		assert(backend.applyCount == 1, "first successful sample did not apply")
 		assert(backend.batches[1][1].deltaTime == 0 and backend.batches[1][2].deltaTime == 0, "first deltas were not zero")
 
-		frameNow = 41
+		sampleTime = 41
 		controller:update()
 		assert(sourceCalls == 2 and readerCalls == 2, "second update oversampled source or reader")
 		assert(backend.applyCount == 2, "unchanged logical sample skipped backend apply")
 		assert(backend.batches[2][1].deltaTime == 0 and backend.batches[2][2].deltaTime == 0, "held deltas were not zero")
 	end)
 
-	test("uses play then layer then controller reader precedence with one frame coordinate", function(): ()
+	test("uses play then layer then controller reader precedence with one sample time", function(): ()
 		local backend = newBackend()
-		local frameNow = 100
+		local sampleTime = 100
 		local defaultPosition = 10
 		local layerPosition = 20
 		local playPosition = 30
-		local observedFrames = {} :: { number }
+		local observedTimes = {} :: { number }
 		local calls = { default = 0, layer = 0, play = 0, shadow = 0 }
-		local defaultReader = function(sampleFrameNow: number): number
+		local defaultReader = function(time: number): number
 			calls.default += 1
-			observedFrames[#observedFrames + 1] = sampleFrameNow
+			observedTimes[#observedTimes + 1] = time
 			return defaultPosition
 		end
-		local layerReader = function(sampleFrameNow: number): number
+		local layerReader = function(time: number): number
 			calls.layer += 1
-			observedFrames[#observedFrames + 1] = sampleFrameNow
+			observedTimes[#observedTimes + 1] = time
 			return layerPosition
 		end
-		local shadowReader = function(_sampleFrameNow: number): number
+		local shadowReader = function(_time: number): number
 			calls.shadow += 1
 			return 999
 		end
-		local playReader = function(sampleFrameNow: number): number
+		local playReader = function(time: number): number
 			calls.play += 1
-			observedFrames[#observedFrames + 1] = sampleFrameNow
+			observedTimes[#observedTimes + 1] = time
 			return playPosition
 		end
 		local controller = AnimationController.new({
 			backend = backend,
 			timeSource = function(): number
-				return frameNow
+				return sampleTime
 			end,
-			logicalTimeReader = defaultReader,
+			logicalPositionReader = defaultReader,
 			layers = {
 				{ id = "default" },
-				{ id = "layer", logicalTimeReader = layerReader },
-				{ id = "play", logicalTimeReader = shadowReader },
+				{ id = "layer", logicalPositionReader = layerReader },
+				{ id = "play", logicalPositionReader = shadowReader },
 			},
 		})
 		controller:play("default", makeMotion("default/clip", "idle", 1))
 		controller:play("layer", makeMotion("layer/clip", "idle", 1))
 		controller:play("play", makeMotion("play/clip", "idle", 1), {
-			logicalTimeReader = playReader,
+			logicalPositionReader = playReader,
 		})
 
 		controller:update()
 		assert(calls.default == 1 and calls.layer == 1 and calls.play == 1, "selected readers were not sampled once")
 		assert(calls.shadow == 0, "play reader did not replace the layer reader")
-		for _, observed in observedFrames do
-			assert(observed == 100, "readers did not receive the same frameNow")
+		for _, observed in observedTimes do
+			assert(observed == 100, "readers did not receive the same sample time")
 		end
 
-		frameNow = 101
+		sampleTime = 101
 		defaultPosition += 0.5
 		layerPosition += 1
 		playPosition += 2
@@ -263,7 +263,7 @@ local ok, result = pcall(function(): number
 	test("creates a fresh first-sample baseline for every replacement play", function(): ()
 		local backend = newBackend()
 		local logicalPosition = 10
-		local reader = function(_frameNow: number): number
+		local reader = function(_time: number): number
 			return logicalPosition
 		end
 		local controller = AnimationController.new({
@@ -271,7 +271,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = reader,
+			logicalPositionReader = reader,
 			layers = { { id = "base" } },
 		})
 		controller:play("base", makeMotion("first", "idle", 1))
@@ -282,7 +282,7 @@ local ok, result = pcall(function(): number
 		assert(backend.batches[2][1].deltaTime == 2, "forward sample difference was wrong")
 
 		controller:play("base", makeMotion("replacement", "wave", 1), {
-			logicalTimeReader = reader,
+			logicalPositionReader = reader,
 		})
 		logicalPosition = 20
 		controller:update()
@@ -303,14 +303,14 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 50
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return basePosition
 			end,
 			layers = {
 				{ id = "base", speed = 2 },
 				{
 					id = "action",
-					logicalTimeReader = function(_frameNow: number): number
+					logicalPositionReader = function(_time: number): number
 						return actionPosition
 					end,
 				},
@@ -361,14 +361,14 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 10
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return basePosition
 			end,
 			layers = {
 				{ id = "base" },
 				{
 					id = "action",
-					logicalTimeReader = function(_frameNow: number): number
+					logicalPositionReader = function(_time: number): number
 						return actionPosition
 					end,
 				},
@@ -398,7 +398,7 @@ local ok, result = pcall(function(): number
 				timeSource = function(): number
 					return invalidSource
 				end,
-				logicalTimeReader = function(_frameNow: number): number
+				logicalPositionReader = function(_time: number): number
 					readerCalls += 1
 					return 0
 				end,
@@ -420,7 +420,7 @@ local ok, result = pcall(function(): number
 				timeSource = function(): number
 					return 1
 				end,
-				logicalTimeReader = function(_frameNow: number): number
+				logicalPositionReader = function(_time: number): number
 					return invalidPosition
 				end,
 				layers = { { id = "base" } },
@@ -444,14 +444,14 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return basePosition
 			end,
 			layers = {
 				{ id = "base" },
 				{
 					id = "action",
-					logicalTimeReader = function(_frameNow: number): number
+					logicalPositionReader = function(_time: number): number
 						return actionPosition
 					end,
 				},
@@ -486,7 +486,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 0
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return logicalPosition
 			end,
 			layers = { { id = "base" } },
@@ -506,7 +506,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 			layers = {
@@ -529,7 +529,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 			layers = { { id = "base" } },
@@ -560,7 +560,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 			layers = { { id = "base" } },
@@ -581,7 +581,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return logicalPosition
 			end,
 			layers = { { id = "base" } },
@@ -617,7 +617,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 			layers = { { id = "base" } },
@@ -653,7 +653,7 @@ local ok, result = pcall(function(): number
 				timeSource = function(): number
 					return 1
 				end,
-				logicalTimeReader = function(_frameNow: number): number
+				logicalPositionReader = function(_time: number): number
 					return 1
 				end,
 				layers = {
@@ -675,7 +675,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return logicalPosition
 			end,
 			layers = { { id = "base" } },
@@ -702,7 +702,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 			layers = { { id = "base" } },
@@ -738,7 +738,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 		})
@@ -778,7 +778,7 @@ local ok, result = pcall(function(): number
 			timeSource = function(): number
 				return 1
 			end,
-			logicalTimeReader = function(_frameNow: number): number
+			logicalPositionReader = function(_time: number): number
 				return 1
 			end,
 			layers = { { id = "base", defaultFadeOut = 0.75 } },

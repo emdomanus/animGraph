@@ -12,7 +12,7 @@ local ParameterStoreTypes = require(script.Parent.parameterStore)
 export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 	timeSource: DefTypes.TimeSource,
-	logicalTimeReader: DefTypes.LogicalTimeReader,
+	logicalPositionReader: DefTypes.LogicalPositionReader,
 	layers: { LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT> }?,
 }
 
@@ -133,7 +133,7 @@ export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> & {
 		_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		_timeSource: DefTypes.TimeSource,
-		_logicalTimeReader: DefTypes.LogicalTimeReader,
+		_logicalPositionReader: DefTypes.LogicalPositionReader,
 		_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
 		_layerOrder: { LayerT },
 		_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,

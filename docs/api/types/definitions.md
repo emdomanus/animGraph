@@ -16,7 +16,7 @@ export type AnimationPosition =
 Seconds are finite and non-negative. Normalized values are finite and in the
 inclusive interval `[0, 1]`. The union addresses native clip position for
 initial materialization or live backend positioning; it is not the graph's
-logical-time sample.
+logical-position sample.
 
 ## TimeSource
 
@@ -25,19 +25,19 @@ export type TimeSource = () -> number
 ```
 
 A controller samples its source exactly once per successful update attempt. The
-finite result is a shared coordinate passed to all selected readers. AnimGraph
-does not integrate it, treat it as a logical position, or own its lifetime.
+finite result is one shared time passed to all selected readers. AnimGraph does
+not integrate it, treat it as a logical position, or own its lifetime.
 
-## LogicalTimeReader
+## LogicalPositionReader
 
 ```luau
-export type LogicalTimeReader = (frameNow: number) -> number
+export type LogicalPositionReader = (time: number) -> number
 ```
 
-A reader returns one finite logical position. Each distinct selected function is
-sampled at most once per update. AnimGraph derives delta from consecutive
-per-activation samples; it does not accept a rate, timescale, clock, mutable
-timeline, or reset/rebase operation.
+A reader converts the supplied time into one finite logical position. Each
+distinct selected function is sampled at most once per update. AnimGraph derives
+delta from consecutive per-activation positions; it does not accept a rate,
+timescale, clock, mutable timeline, or reset/rebase operation.
 
 ## TrackCompletedEvent
 

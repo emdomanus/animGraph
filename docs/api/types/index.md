@@ -8,7 +8,7 @@ namespace instead of requiring implementation modules.
 
 - `AnimationPosition`
 - `TimeSource`
-- `LogicalTimeReader`
+- `LogicalPositionReader`
 - `Release`
 - `TrackCompletedEvent<LayerT, StateT>`
 

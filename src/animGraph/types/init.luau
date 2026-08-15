@@ -19,7 +19,7 @@ local StackModifierTypes = require(script.components.stackModifier)
 
 export type AnimationPosition = DefTypes.AnimationPosition
 export type TimeSource = DefTypes.TimeSource
-export type LogicalTimeReader = DefTypes.LogicalTimeReader
+export type LogicalPositionReader = DefTypes.LogicalPositionReader
 export type Release = DefTypes.Release
 export type TrackCompletedEvent<LayerT, StateT> = DefTypes.TrackCompletedEvent<LayerT, StateT>
 

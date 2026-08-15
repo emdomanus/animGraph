@@ -7,7 +7,7 @@ requests, then delegates materialization to an injected backend.
 The package owns sampled graph evaluation. It does not own a clock, a
 `RunService` connection, character policy, Tempo, or TemporalService. A caller
 chooses when to invoke `controller:update()` and supplies plain functions that
-read logical time at one shared frame coordinate.
+convert one shared sampled time into logical positions.
 
 ## Start Here
 
@@ -27,7 +27,7 @@ caller-owned scheduler
         v
 AnimationController --samples--> TimeSource once
         |
-        | selects play > layer > default LogicalTimeReader
+        | selects play > layer > default LogicalPositionReader
         | preflights every selected sample
         v
 LayerRuntime(s) --evaluate with logical dt--> ClipRequest[]
@@ -37,7 +37,7 @@ LayerRuntime(s) --evaluate with logical dt--> ClipRequest[]
 RobloxAnimatorBackend / custom backend
 ```
 
-Each active play has its own logical-time baseline. Its first sample produces
+Each active play has its own logical-position baseline. Its first sample produces
 zero delta. An unchanged position holds graph state, a forward position uses the
 exact finite difference, and a backward or non-finite sample rejects the whole
 update before graph or backend mutation. Request speed remains a separate native

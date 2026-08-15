@@ -8,7 +8,7 @@ export type AnimationPosition =
 
 export type TimeSource = () -> number
 
-export type LogicalTimeReader = (frameNow: number) -> number
+export type LogicalPositionReader = (time: number) -> number
 
 export type Release = () -> ()
 

@@ -66,8 +66,8 @@ LayerRuntime.__index = LayerRuntime
 function LayerRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	definition: LayerDefinition<LayerT, LayerBackendT>
 ): LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-	if definition.logicalTimeReader ~= nil then
-		assert(typeof(definition.logicalTimeReader) == "function", "logicalTimeReader must be a function")
+	if definition.logicalPositionReader ~= nil then
+		assert(typeof(definition.logicalPositionReader) == "function", "logicalPositionReader must be a function")
 	end
 
 	local self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
@@ -83,13 +83,13 @@ function LayerRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		optionNumber(definition.defaultFadeOut, DEFAULT_FADE_OUT),
 		"defaultFadeOut"
 	)
-	self._logicalTimeReader = definition.logicalTimeReader
+	self._logicalPositionReader = definition.logicalPositionReader
 	self._motion = nil
 	self._state = nil
 	self._fadeTime = self._defaultFadeIn
 	self._overrides = nil
-	self._playLogicalTimeReader = nil
-	self._lastLogicalTime = nil
+	self._playLogicalPositionReader = nil
+	self._lastLogicalPosition = nil
 	self._playing = false
 
 	return self
@@ -109,8 +109,8 @@ function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	if options ~= nil and options.initialPosition ~= nil then
 		AnimationPosition.assertValid(options.initialPosition)
 	end
-	if options ~= nil and options.logicalTimeReader ~= nil then
-		assert(typeof(options.logicalTimeReader) == "function", "logicalTimeReader must be a function")
+	if options ~= nil and options.logicalPositionReader ~= nil then
+		assert(typeof(options.logicalPositionReader) == "function", "logicalPositionReader must be a function")
 	end
 
 	self._motion = motion
@@ -122,8 +122,8 @@ function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		"fadeTime"
 	)
 	self._overrides = copyOverrides(options)
-	self._playLogicalTimeReader = if options ~= nil then options.logicalTimeReader else nil
-	self._lastLogicalTime = nil
+	self._playLogicalPositionReader = if options ~= nil then options.logicalPositionReader else nil
+	self._lastLogicalPosition = nil
 	self._playing = true
 end
 
@@ -133,33 +133,33 @@ function LayerRuntime.stop<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._motion = nil
 	self._state = nil
 	self._overrides = nil
-	self._playLogicalTimeReader = nil
-	self._lastLogicalTime = nil
+	self._playLogicalPositionReader = nil
+	self._lastLogicalPosition = nil
 	self._playing = false
 end
 
-function LayerRuntime._selectLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function LayerRuntime._selectLogicalPositionReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	defaultReader: DefTypes.LogicalTimeReader
-): DefTypes.LogicalTimeReader?
+	defaultReader: DefTypes.LogicalPositionReader
+): DefTypes.LogicalPositionReader?
 	if not self._playing then
 		return nil
 	end
 
-	return self._playLogicalTimeReader or self._logicalTimeReader or defaultReader
+	return self._playLogicalPositionReader or self._logicalPositionReader or defaultReader
 end
 
-function LayerRuntime._getLogicalTimeBaseline<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function LayerRuntime._getLogicalPositionBaseline<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 ): number?
-	return self._lastLogicalTime
+	return self._lastLogicalPosition
 end
 
-function LayerRuntime._commitLogicalTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function LayerRuntime._commitLogicalPositionSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	position: number
 ): ()
-	self._lastLogicalTime = position
+	self._lastLogicalPosition = position
 end
 
 function LayerRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(

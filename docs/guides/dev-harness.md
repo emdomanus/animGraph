@@ -8,7 +8,7 @@ rojo serve dev.project.json
 ```
 Connect a blank Roblox Studio place and press Play. The harness constructs the
 controller with `os.clock` as `TimeSource` and an identity default
-`LogicalTimeReader`, then owns this update connection:
+`LogicalPositionReader`, then owns this update connection:
 
 ```luau
 local updateConnection = RunService.PreAnimation:Connect(function()

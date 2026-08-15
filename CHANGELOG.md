@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Renamed the timing seam to `LogicalPositionReader` / `logicalPositionReader`
+  and its input to `time`, distinguishing the shared sampled time from each
+  reader's returned logical position without retaining compatibility aliases.
 - Recorded operator-reviewed CP-TA3 closure: the 51-test deterministic/static
   gate and all 12 Studio cases passed; VoxelMMO timing proofs and release
   decisions remain deferred.
@@ -18,13 +21,13 @@
   addressing, terminal/natural completion, looping, replacement, reappearance
   during fade, listener mutation, and physical cleanup visibility.
 - Replaced the controller-wide delta argument with caller-scheduled `update()` that
-  samples one `TimeSource` coordinate and selected play/layer/default
-  `LogicalTimeReader` functions, derives per-activation deltas, and adds
+  samples one `TimeSource` time and selected play/layer/default
+  `LogicalPositionReader` functions, derives per-activation deltas, and adds
   request-local `deltaTime`.
 - Removed the controller-owned frame-binding helper; callers now own update scheduling. Non-finite or
   backward samples reject atomically while first, held, and exact-forward
   samples use the documented baseline behavior.
-- Added canonical `AnimationPosition`, `TimeSource`, and `LogicalTimeReader`
+- Added canonical `AnimationPosition`, `TimeSource`, and `LogicalPositionReader`
   declarations under `types/def`, moved implementation helpers under `utils`,
   and deleted the superseded public delta-map surface completely.
 - Replaced the two legacy numeric position fields with the canonical, validated

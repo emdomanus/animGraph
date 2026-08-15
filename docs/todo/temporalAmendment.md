@@ -30,15 +30,15 @@ Tempo, TemporalService, character presentation, timing bindings, or caller-owned
 - Layers remain generic `LayerT` values declared by the caller. No character-specific layers enter
   the package.
 - The caller schedules `update()` once for each graph sample. AnimGraph samples one borrowed
-  `TimeSource` value, then samples caller-supplied structural logical-time readers selected per
+  `TimeSource` value, then samples caller-supplied structural logical-position readers selected per
   active layer. It derives layer delta from consecutive logical-position samples.
-- The controller config requires one default logical-time reader. A layer definition and an active
+- The controller config requires one default logical-position reader. A layer definition and an active
   play may replace that default for their scope; play overrides layer, and layer overrides the
   controller default. Selection is replacement, never multiplication.
 - A reader whose logical position is unchanged yields zero logical delta, pausing logical
   advancement for that layer while other layers can advance independently.
 - The controller has no logical clock, mutable timeline, timescale, or position/rate setter. Its
-  `TimeSource` is only a once-per-update sampling coordinate passed to readers; it is not a logical
+  `TimeSource` is only the once-per-update time passed to readers; it is not a logical
   time value or multiplier.
 - Layer/request speed remains an independent input. AnimGraph performs its documented authored
   layer/request speed composition, then forwards the resulting request speed to the backend without
@@ -124,10 +124,10 @@ Tempo, TemporalService, character presentation, timing bindings, or caller-owned
 
 | Consumer | Current ownership | What it needs from AnimGraph |
 | --- | --- | --- |
-| VoxelMMO `CharacterAnimator` | Creates the Roblox `AnimationController`/`Animator`, AnimGraph backend and controller; arbitrates one active entry per caller-defined layer; gives each entry a unique `character/<layer>/<token>` key. | A borrowed default structural logical-time reader plus optional entry/layer reader selection, independent resolved speed, one-shot initial position, live track positioning by key, and completion by the same key. |
+| VoxelMMO `CharacterAnimator` | Creates the Roblox `AnimationController`/`Animator`, AnimGraph backend and controller; arbitrates one active entry per caller-defined layer; gives each entry a unique `character/<layer>/<token>` key. | A borrowed default structural logical-position reader plus optional entry/layer reader selection, independent resolved speed, one-shot initial position, live track positioning by key, and completion by the same key. |
 | VoxelMMO `CharacterAnimationPlayback` | Content-facing stable handle with `stop`, `setSpeed`, snapshot, and `bindToEnded`; its end-reason union already contains `"completed"`. | VoxelMMO can map an AnimGraph completion event to the existing handle without exposing the Roblox track. A future VoxelMMO position operation can delegate to AnimGraph without replacing the handle. |
 | VoxelMMO `CharacterProceduralAnimator` | Chooses base/stance/block/transition content and changes requested speed; owns gameplay-specific landing and locomotion policy. | No new package policy. `CharacterAnimator` selects the active logical reader and resolves the playback-speed basis before AnimGraph evaluates it. |
-| VoxelMMO `CharacterVisualizer` | Owns frame stepping, target/profile changes, and construction order for animator, procedural animator, and presentation host. | It schedules `update()`, supplies the frame sampling source, and will eventually coordinate presentation timing and target rematerialization. AnimGraph must not import this owner. |
+| VoxelMMO `CharacterVisualizer` | Owns frame stepping, target/profile changes, and construction order for animator, procedural animator, and presentation host. | It schedules `update()`, supplies the `TimeSource`, and will eventually coordinate presentation timing and target rematerialization. AnimGraph must not import this owner. |
 | VoxelMMO `CharacterPresentationHost` | Borrowed view exposing the simple `play(request)` content surface. The current view also exposes VoxelMMO's `pushHitstop` command; no production animation-command consumer exists yet. | Stable VoxelMMO playback handles and VoxelMMO-owned timing bindings; no new AnimGraph host type or policy command. |
 | VoxelMMO future sequence/action/VFX consumers | Planned users of completion and possibly authored markers. | Completion is required now. Marker semantics are not sufficiently specified to freeze a package API. |
 | Tempo / VoxelMMO `TemporalService` | Own clock samples, effective rates, revision/change classification, and discontinuity policy. | Nothing from AnimGraph. VoxelMMO adapts borrowed timing state to a plain structural logical-position reader, resolved speed, and explicit position commands. |
@@ -153,7 +153,7 @@ Tempo <- TemporalService <- VoxelMMO presentation owner -> CharacterAnimator -> 
 
 AnimGraph receives only plain structural functions and resolved request values and never imports
 anything to the left of `CharacterAnimator`. Readers are borrowed and non-owning. VoxelMMO may back
-one with cached reactive timing state plus extrapolation at the supplied frame sample; AnimGraph
+one with cached reactive timing state plus extrapolation at the supplied time; AnimGraph
 does not subscribe to, mutate, or destroy that state.
 
 ## Proposed public contract
@@ -168,7 +168,7 @@ export type AnimationPosition =
 
 export type TimeSource = () -> number
 
-export type LogicalTimeReader = (frameNow: number) -> number
+export type LogicalPositionReader = (time: number) -> number
 
 export type TrackCompletedEvent<LayerT, StateT> = {
 	name: "trackCompleted",
@@ -178,8 +178,8 @@ export type TrackCompletedEvent<LayerT, StateT> = {
 }
 ```
 
-`TimeSource` and `LogicalTimeReader` return finite seconds. `frameNow` is only a shared sampling
-coordinate; the logical reader's returned position is the state-machine/blend domain. That domain is
+`TimeSource` and `LogicalPositionReader` return finite seconds. `time` is the one shared time sampled
+for the update; the logical reader converts it into a state-machine/blend position. That domain is
 separate from `AnimationPosition`: `seconds` addresses native clip seconds, while `normalized`
 addresses the inclusive clip fraction `[0, 1]`.
 
@@ -190,17 +190,17 @@ addresses the inclusive clip fraction `[0, 1]`.
 initialPosition: AnimationPosition?
 ```
 
-`AnimationControllerConfig` requires the sampling coordinate and default logical reader:
+`AnimationControllerConfig` requires the time source and default logical-position reader:
 
 ```luau
 timeSource: TimeSource,
-logicalTimeReader: LogicalTimeReader,
+logicalPositionReader: LogicalPositionReader,
 ```
 
 `LayerDefinition` and `LayerPlayOptions` each add an optional persistent replacement:
 
 ```luau
-logicalTimeReader: LogicalTimeReader?,
+logicalPositionReader: LogicalPositionReader?,
 ```
 
 The active play option has highest precedence, then the layer definition, then the controller
@@ -227,7 +227,7 @@ controller:setTrackPosition(
 
 On each `update`, the controller calls `timeSource` exactly once and validates the finite result. It
 selects a reader for every layer with an active logical play, calls each distinct selected reader at
-most once with the same `frameNow`, validates every finite logical position, and computes all deltas
+most once with the same `time`, validates every finite logical position, and computes all deltas
 before any graph evaluation or backend mutation. Shared readers therefore produce one coherent
 sample across their layers.
 
@@ -262,7 +262,7 @@ and releases it during destruction. `AnimationEvent` becomes a discriminated uni
 `AnimationEventName` adds `"trackCompleted"`; the unused `"motionRequested"` declaration is deleted
 rather than retained as a dead compatibility surface.
 
-Shared public definitions, including `AnimationPosition`, `TimeSource`, and `LogicalTimeReader`, are
+Shared public definitions, including `AnimationPosition`, `TimeSource`, and `LogicalPositionReader`, are
 declared once in `src/animGraph/types/def/init.luau` and re-exported through the existing type and
 package barrels. `LayerDeltaTimes` is deleted. Small implementation-only validation helpers move
 under `src/animGraph/utils/` rather than remaining at the package root. Runtime modules import the
@@ -439,7 +439,7 @@ This section is a migration requirement and proof target, not AnimGraph implemen
 AnimGraph API. The exact private VoxelMMO type names remain for that repository's migration review.
 
 - `CharacterAnimator` receives a borrowed default character clock/reader. The MVP may inject the
-  world clock as that default. VoxelMMO adapts it to AnimGraph's structural `LogicalTimeReader`;
+  world clock as that default. VoxelMMO adapts it to AnimGraph's structural `LogicalPositionReader`;
   neither the raw clock nor the binding becomes an AnimGraph API value.
 - Every active animation entry may carry an internal timing binding that overrides the default.
   Timing selection belongs to the active entry, not the AnimGraph controller instance.
@@ -478,20 +478,20 @@ suite:
 
 | Scenario | Required proof |
 | --- | --- |
-| Character timing rate `0.5`, discrete attack | The attack layer's selected reader advances by `0.5` per unit frame time, its sampled logical delta follows `0.5`, and its authored/request native animation speed is resolved with rate `0.5` exactly once. No later AnimGraph or controller-instance multiplier is applied. |
+| Character timing rate `0.5`, discrete attack | The attack layer's selected reader advances by `0.5` per unit sampled time, its sampled logical delta follows `0.5`, and its authored/request native animation speed is resolved with rate `0.5` exactly once. No later AnimGraph or controller-instance multiplier is applied. |
 | Character timing rate `0.5`, velocity already reduced to `0.5` | The locomotion playback's motion-derived native speed remains `0.5`; it never becomes `0.25`. Its logical layer delta comes independently from the selected reader. |
 | Two characters each at `0.5`, finisher sequence timing rate `1` | Both finisher action animations select the sequence reader and resolved native rate `1`. Unrelated layers on each character retain their character readers/rates at `0.5`, and neither character clock is changed. |
 
 ## Rejected shapes
 
 - Injecting Tempo clocks, TemporalService, revisions, timing-binding objects, or rate modifiers into
-  AnimGraph. The generic `LogicalTimeReader` function is the dependency boundary; anything richer
+  AnimGraph. The generic `LogicalPositionReader` function is the dependency boundary; anything richer
   would reverse the dependency and make a reusable package game-specific.
 - Passing a complete per-layer delta map, adding controller/layer timescale or logical-position
   setters, or applying a character-clock multiplier. AnimGraph samples selected logical positions
   and derives delta; it does not own mutable timing state.
 - Retaining `bindToPreAnimation` or adding any self-bound frame connection. The caller owns update
-  scheduling; the controller's `TimeSource` only makes every reader sample share one frame coordinate.
+  scheduling; the controller's `TimeSource` only makes every reader sample share one time.
 - Making the reader return position plus rate or having AnimGraph integrate a supplied rate. Readers
   expose resolved logical position only. Native request speed remains a separate discrete input.
 - Adding an AnimGraph reset/rebase command for reader history. A new play/binding gets a fresh
@@ -512,10 +512,10 @@ suite:
 1. Before CP-TA1 production source work is accepted or resumed, add the selected project-local Lune
    pin, package-owned module loader, suite entrypoint, and smoke proof; run it successfully from the
    AnimGraph root.
-2. Consolidate `AnimationPosition`, `TimeSource`, and `LogicalTimeReader` in
+2. Consolidate `AnimationPosition`, `TimeSource`, and `LogicalPositionReader` in
    `src/animGraph/types/def/init.luau`, keep root re-exports, move implementation-only validation to
    `src/animGraph/utils/`, and delete the draft `LayerDeltaTimes` type/module/export.
-3. Change controller/layer evaluation to `update()`: sample one finite frame coordinate, select
+3. Change controller/layer evaluation to `update()`: sample one finite time, select
    play/layer/default readers, preflight reader results, derive per-layer delta and baselines, put the
    derived value on each request, remove the backend's ambiguous global `dt`, and delete
    `bindToPreAnimation`.
@@ -640,12 +640,12 @@ publication/version decisions remain deferred.
 
 | Area | Case | Required result | Venue |
 | --- | --- | --- | --- |
-| Sampling coordinate | Call `update()` with several active layers/readers | `timeSource` is called exactly once; every reader receives that same finite `frameNow`. | Lune spec |
+| Shared sample time | Call `update()` with several active layers/readers | `timeSource` is called exactly once; every reader receives that same finite `time`. | Lune spec |
 | Shared reader coherence | Two layers select the same reader | The reader is called once for the update and both layers derive from the same position sample. | Lune spec |
 | Reader precedence | Controller, layer, and active play provide different readers | Play replaces layer, layer replaces controller default, and no sampled value or rate is multiplied through the fallback chain. | Lune spec |
 | Activation baseline | First update, a replacement play, or a new play that reuses the same reader | The selected position becomes a fresh baseline and logical delta is zero for that update; later forward samples use exact differences. | Lune spec |
 | Independently frozen layer | One selected reader holds its position while another advances | The first layer receives zero logical delta and its graph state holds; the other receives its exact derived delta and advances. | Lune spec + Studio visual |
-| Sample validation | Frame source or any reader returns NaN/infinity, or a reader moves backward | Whole update rejects before graph evaluation/backend mutation and preserves every prior baseline. | Lune spec |
+| Sample validation | `TimeSource` or any reader returns NaN/infinity, or a reader moves backward | Whole update rejects before graph evaluation/backend mutation and preserves every prior baseline. | Lune spec |
 | Large forward sample | A reader advances by a large finite amount | AnimGraph supplies the exact positive delta and existing graph semantics advance from it; no discontinuity or seek is inferred. | Lune spec |
 | Delta/speed independence | Derive logical delta `0.25` while resolved request speed is `1.75`, then change each independently | Context/request delta remains exactly reader-derived `0.25`; backend speed remains exactly `1.75`; AnimGraph never multiplies or rewrites one with the other. | Lune spec + Studio visual |
 | Backend-neutral sampling | Repeat a successful update with zero or unchanged native desired state | Backend `apply` still receives the sampled request/delta for custom per-frame work; the Roblox backend emits no redundant native operations. | Backend-seam Lune spec |
@@ -775,7 +775,7 @@ proof; it does not duplicate the 12-case record here.
 - Any AnimGraph dependency on Tempo or TemporalService.
 - Tempo clock/timing-binding objects, reader effective-rate APIs, rate modifiers, synchronization,
   discontinuity detection, adapter rebasing, duration-based freeze policy, and presentation
-  scheduling. The generic logical-position function and frame sample are the complete package seam.
+  scheduling. The generic logical-position function and shared time sample are the complete package seam.
 - Continuous signed reverse traversal of state machines or reconstruction of graph event history.
 - Marker, keyframe, and loop event forwarding or synthesis.
 - Timeline-controlled suspension of Roblox native weight fades.
@@ -791,7 +791,7 @@ There are no open design blockers for CP-TA1, CP-TA2, or CP-TA3. The binding dec
 1. `trackKey` is the public logical/backend identity. AnimGraph adds only
    `setTrackPosition(trackKey, AnimationPosition)` and `trackCompleted`; it exposes no package
    playback handle or raw `AnimationTrack`.
-2. `update()` takes no frame arguments. It samples one `TimeSource` coordinate and structural logical
+2. `update()` takes no arguments. It samples one `TimeSource` time and structural logical-position
    readers with play-over-layer-over-controller fallback, then derives each active layer's delta from
    a per-activation baseline. There is no AnimGraph clock, delta map, mutable timeline,
    controller-wide timescale, self-bound update, or temporal speed multiplier.

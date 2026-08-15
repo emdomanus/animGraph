@@ -8,7 +8,7 @@ policy or authorize changes in VoxelMMO.
 VoxelMMO should own character timing bindings, clock selection, effective native
 speed, discontinuity classification, target rematerialization, and stable
 content-facing playback handles. It adapts that state to AnimGraph's plain
-`TimeSource`, `LogicalTimeReader`, layer/play options, and already-resolved
+`TimeSource`, `LogicalPositionReader`, layer/play options, and already-resolved
 request speeds.
 
 ```text

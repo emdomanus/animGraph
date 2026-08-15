@@ -13,14 +13,14 @@ export type LayerDefinition<LayerT, LayerBackendT> = {
 	layerBackend: LayerBackendT?,
 	defaultFadeIn: number?,
 	defaultFadeOut: number?,
-	logicalTimeReader: DefTypes.LogicalTimeReader?,
+	logicalPositionReader: DefTypes.LogicalPositionReader?,
 }
 
 export type LayerPlayOptions<StateT, LayerBackendT> = MotionNodeTypes.MotionRequestOverrides<LayerBackendT> & {
 	state: StateT?,
 	fadeTime: number?,
 	fadeIn: number?,
-	logicalTimeReader: DefTypes.LogicalTimeReader?,
+	logicalPositionReader: DefTypes.LogicalPositionReader?,
 }
 
 export type LayerDebugSnapshot<LayerT, StateT, LayerBackendT> = {
@@ -78,22 +78,22 @@ export type LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 		_layerBackend: LayerBackendT?,
 		_defaultFadeIn: number,
 		_defaultFadeOut: number,
-		_logicalTimeReader: DefTypes.LogicalTimeReader?,
+		_logicalPositionReader: DefTypes.LogicalPositionReader?,
 		_motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>?,
 		_state: StateT?,
 		_fadeTime: number,
 		_overrides: MotionNodeTypes.MotionRequestOverrides<LayerBackendT>?,
-		_playLogicalTimeReader: DefTypes.LogicalTimeReader?,
-		_lastLogicalTime: number?,
+		_playLogicalPositionReader: DefTypes.LogicalPositionReader?,
+		_lastLogicalPosition: number?,
 		_playing: boolean,
-		_selectLogicalTimeReader: (
+		_selectLogicalPositionReader: (
 			self: LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-			defaultReader: DefTypes.LogicalTimeReader
-		) -> DefTypes.LogicalTimeReader?,
-		_getLogicalTimeBaseline: (
+			defaultReader: DefTypes.LogicalPositionReader
+		) -> DefTypes.LogicalPositionReader?,
+		_getLogicalPositionBaseline: (
 			self: LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 		) -> number?,
-		_commitLogicalTimeSample: (
+		_commitLogicalPositionSample: (
 			self: LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 			position: number
 		) -> (),

@@ -51,7 +51,7 @@ fits the complete diagram without clipping.
 | Role | Constructed by | Lifecycle owner | Consumes | Produces or exposes |
 | --- | --- | --- | --- | --- |
 | Caller-owned scheduler | Consumer code | Consumer code | Its chosen phase/cadence | Calls `controller:update()`; disconnects its own connection |
-| `TimeSource` and `LogicalTimeReader` | Consumer code | Consumer code | A frame sample supplied by the caller | Borrowed finite time coordinates; AnimGraph never subscribes to or destroys them |
+| `TimeSource` and `LogicalPositionReader` | Consumer code | Consumer code | One sampled time supplied by the caller | A borrowed finite time and its converted logical positions; AnimGraph never subscribes to or destroys the functions |
 | `AnimationController` | `AnimGraph.new` or `animationController.new` | Caller that created it | Scheduler calls, timing functions, layer definitions, parameters, and a backend | Coherent reader samples, graph evaluation, request validation, and controller events |
 | `ParameterStore` | `AnimationController` | `AnimationController` | Raw, float, bool, and trigger parameter writes | Values and trigger consumption for motion evaluation |
 | `EventBus` | `AnimationController` | `AnimationController` | State, transition, and backend completion events | Snapshot-dispatched public controller callbacks |
@@ -92,11 +92,11 @@ never cross the package's public boundary.
 
 `controller:update()` is a caller-invoked transaction:
 
-1. The controller calls the borrowed `TimeSource` exactly once and validates a
-   finite frame coordinate.
+1. The controller calls the borrowed `TimeSource` exactly once and validates one
+   finite sample time.
 2. Each active `LayerRuntime` selects its play reader, then layer reader, then
    controller default. Each distinct selected function is called at most once
-   with that shared coordinate.
+   with that same sampled time.
 3. All logical positions and forward deltas are preflighted against each
    layer activation's baseline. A non-finite or backward sample rejects before
    graph or backend mutation.

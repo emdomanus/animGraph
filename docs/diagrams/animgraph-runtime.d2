@@ -53,14 +53,14 @@ classes: {
 caller: "Caller-owned boundary" {
   direction: right
   scheduler: "Caller scheduler\nphase / cadence"
-  time-source: "TimeSource\nborrowed frame coordinate"
-  logical-time-reader: "LogicalTimeReader\nborrowed logical position"
+  time-source: "TimeSource\nborrowed sample time"
+  logical-position-reader: "LogicalPositionReader\ntime to logical position"
   input-seam: "Controller input seam\nupdate call + borrowed functions"
   input-seam.class: public-contract
 
   scheduler -> input-seam: "invokes update()" {class: calls}
   time-source -> input-seam: "borrowed function" {class: data}
-  logical-time-reader -> input-seam: "borrowed function" {class: data}
+  logical-position-reader -> input-seam: "borrowed function" {class: data}
 }
 
 controller: "Controller ownership" {

@@ -92,8 +92,8 @@ local sequenceToken = 0
 local activeSequenceName = "none"
 local baseLogicalPosition = 0
 local actionLogicalPosition = 0
-local lastBaseFrameNow: number? = nil
-local lastActionFrameNow: number? = nil
+local lastBaseSampleTime: number? = nil
+local lastActionSampleTime: number? = nil
 local baseLogicalHeld = false
 local actionLogicalHeld = false
 
@@ -169,30 +169,30 @@ local function updateSummary(): ()
 	)
 end
 
-local function sampleLogicalPosition(frameNow: number, layer: Layer): number
+local function sampleLogicalPosition(time: number, layer: Layer): number
 	if layer == "base" then
-		local previous = lastBaseFrameNow
-		lastBaseFrameNow = frameNow
+		local previous = lastBaseSampleTime
+		lastBaseSampleTime = time
 		if previous ~= nil and not baseLogicalHeld then
-			baseLogicalPosition += math.max(frameNow - previous, 0)
+			baseLogicalPosition += math.max(time - previous, 0)
 		end
 		return baseLogicalPosition
 	end
 
-	local previous = lastActionFrameNow
-	lastActionFrameNow = frameNow
+	local previous = lastActionSampleTime
+	lastActionSampleTime = time
 	if previous ~= nil and not actionLogicalHeld then
-		actionLogicalPosition += math.max(frameNow - previous, 0)
+		actionLogicalPosition += math.max(time - previous, 0)
 	end
 	return actionLogicalPosition
 end
 
-local function baseLogicalReader(frameNow: number): number
-	return sampleLogicalPosition(frameNow, "base")
+local function baseLogicalPositionReader(time: number): number
+	return sampleLogicalPosition(time, "base")
 end
 
-local function actionLogicalReader(frameNow: number): number
-	return sampleLogicalPosition(frameNow, "action")
+local function actionLogicalPositionReader(time: number): number
+	return sampleLogicalPosition(time, "action")
 end
 
 local function getController(): AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
@@ -476,7 +476,7 @@ local function playLifecycleClip(clip: Clip, looped: boolean, forceRestart: bool
 		looped = looped,
 		fadeTime = 0.6,
 		forceRestart = forceRestart == true,
-		logicalTimeReader = actionLogicalReader,
+		logicalPositionReader = actionLogicalPositionReader,
 	})
 	appendLog(
 		"lifecycle play clip="
@@ -653,8 +653,8 @@ local function resetHarnessState(): ()
 	activeActionClip = "wave"
 	baseLogicalPosition = 0
 	actionLogicalPosition = 0
-	lastBaseFrameNow = nil
-	lastActionFrameNow = nil
+	lastBaseSampleTime = nil
+	lastActionSampleTime = nil
 	baseLogicalHeld = false
 	actionLogicalHeld = false
 	replayControllerGraphs()
@@ -1736,14 +1736,14 @@ local function setupController(animator: Animator): ()
 			layerBackend = makeRobloxLayerBackend(actionRobloxPriority),
 			defaultFadeIn = 0.05,
 			defaultFadeOut = 0.12,
-			logicalTimeReader = actionLogicalReader,
+			logicalPositionReader = actionLogicalPositionReader,
 		},
 	}
 
 	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 		backend = backend,
 		timeSource = os.clock,
-		logicalTimeReader = baseLogicalReader,
+		logicalPositionReader = baseLogicalPositionReader,
 		layers = layerDefinitions,
 	}
 
