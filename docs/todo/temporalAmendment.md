@@ -1,9 +1,9 @@
 # Temporal Amendment
 
-**Status:** CP-TA1 and CP-TA2 are implemented, operator-reviewed, and committed. CP-TA3 has not
-started. The
+**Status:** CP-TA1, CP-TA2, and CP-TA3 are implemented, operator-reviewed, and complete. The
 sampled-reader timing amendment below remains the binding contract. Discussion of the complete
-per-layer delta-map shape is retained only as history of the superseded CP-TA1 draft.
+per-layer delta-map shape is retained only as history of the superseded CP-TA1 draft. The stable
+verification checklist and CP-TA3 Studio record live in the [Studio Verification guide](../guides/studio-verification.md).
 
 **Implementation entrance:** passed. The project-local deterministic runner smoke described below
 ran successfully before CP-TA1 production revision work resumed and remains part of the checkpoint
@@ -602,7 +602,7 @@ lightweight post-cleanup tombstone.
 
 **Implementation status: complete, operator-reviewed, and committed.** The public contract, Roblox
 generation/tombstone lifecycle, deterministic seams, dev harness, and documentation are present in
-the CP-TA2 checkpoint. Studio-only engine observations and CP-TA3 remain unexecuted.
+the CP-TA2 checkpoint. The later CP-TA3 operator record is captured in the [Studio Verification guide](../guides/studio-verification.md).
 
 One coherent commit:
 
@@ -627,11 +627,14 @@ Pause for lifecycle, cleanup, re-entrancy, and diff review. No package publishin
 
 ### CP-TA3 -- verification and consumer-readiness gate
 
-No preplanned source tranche. Run the full static/documentation/deterministic suite and the
-Studio-only matrix. Fix discoveries in a focused follow-up commit attached to CP-TA1 or CP-TA2
-semantics, rerun the gate, and produce an exact VoxelMMO migration brief against the reviewed commit.
-The gate closes only when the public surface, backend behavior, tests, docs, and Studio observations
-agree.
+**Closure status: complete and operator-reviewed.** No source tranche was required. The operator
+connected to Place1 and personally completed all 12 Studio cases; the stable checklist and exact
+observations are recorded in the [Studio Verification guide](../guides/studio-verification.md).
+The deterministic/static baseline passed at 51/51 tests, the migration brief remained accurate,
+Studio was returned to Edit mode, and documentation/navigation were brought into the final
+checkpoint shape. Formatting, lint, Luau analysis, both sourcemaps, documentation build, and diff
+checks passed. VoxelMMO timing-composition proofs remain a separate consumer follow-on, and package
+publication/version decisions remain deferred.
 
 ## AnimGraph behavioral test matrix
 
@@ -698,13 +701,29 @@ than retained as duplicate contract pages:
 
 ```text
 docs/
+|-- .vitepress/
+|   |-- config.mts
+|   '-- theme/
+|       |-- index.ts
+|       |-- custom.css
+|       '-- components/ZoomableDiagram.vue
 |-- index.md
 |-- architecture.md
+|-- assets/
+|   |-- animgraph-runtime.svg
+|   '-- animgraph-completion.svg
+|-- diagrams/
+|   |-- animgraph-runtime.d2
+|   |-- animgraph-completion.d2
+|   '-- site-theme.d2
 |-- guides/
+|   |-- index.md
 |   |-- getting-started.md
 |   |-- motions.md
 |   |-- state-machines.md
-|   '-- dev-harness.md
+|   |-- dev-harness.md
+|   |-- verification.md
+|   '-- studio-verification.md
 |-- api/
 |   |-- index.md
 |   |-- controllers/animationController.md
@@ -735,7 +754,9 @@ lune run tests/lune/run.luau
 stylua --check src dev tests
 selene src dev tests
 .\scripts\check-luau.ps1
+rojo sourcemap default.project.json --output sourcemap.json
 npm run docs:build
+git diff --check
 ```
 
 Lune 0.8.9 is the decided deterministic runner. The project-local pin, loader, suite entrypoint, and
@@ -744,38 +765,10 @@ sourcemap diffs and do not commit generated caches or documentation build output
 
 ## Studio-only verification
 
-Roblox engine behavior that cannot be proven by fake backends must be checked in a Rojo-connected
-Studio session using owned test animations:
-
-1. Confirm `TimePosition` writes after `Play` for seconds and normalized positions, including an
-   initially zero `Length`, exact start/end boundaries, beyond-end seconds, and live forward/backward
-   writes.
-2. Confirm non-loop terminal clamping/completion and loop modulo behavior, including normalized `1`
-   canonicalizing to zero for loops.
-3. Record `Stopped` and `Ended` ordering for natural non-loop completion, explicit `Stop(0)`, and
-   non-zero fade; confirm generation flags classify only natural or accepted terminal positioning as
-   completion.
-4. Confirm a naturally completed requested track stays stopped after physical cleanup while its
-   tombstone remains, until a new presence edge or `forceRestart`.
-5. Confirm repeated unchanged apply does not restart a fade or reissue native property operations.
-6. Confirm looped tracks and positions across loop boundaries do not produce completion.
-7. Confirm same-key clip replacement and reappearance during a retiring fade cannot deliver stale
-   callbacks or mutate the active generation, and all physical generations clean up.
-8. Confirm completion callback re-entry through play/stop/position/clear/destroy cannot duplicate
-   completion or leak signals/instances.
-9. Hold one layer's logical reader position while another reader advances. Keep the first layer's
-   resolved native speed non-zero to prove native playback is independent, then set speed
-   independently to zero; record that native weight fades remain engine-time behavior while logical
-   delta is zero.
-10. Run overlapping graph-derived layer, motion, and transition weight changes and confirm the
-    sampled graph applies their composed result each frame without restarting unchanged native fades.
-11. Observe whether `AdjustSpeed` with a negative value provides supported native reverse playback.
-    Record the result only; continuous reverse graph traversal remains outside this contract.
-12. Observe whether live positioning crosses or emits named markers in either direction. Record the
-    result for deferred marker design; do not synthesize or expose it in this amendment.
-13. In the VoxelMMO follow-on, run the three timing-composition proofs and rematerialize a rig target
-    while retaining the content-facing handle, suppressing old-target signals, and resuming at the
-    caller-derived position.
+The stable Studio checklist and the operator-approved results are canonical in
+the [Studio Verification guide](../guides/studio-verification.md). This completed amendment
+retains the design intent and the distinction between engine evidence and deterministic/static
+proof; it does not duplicate the 12-case record here.
 
 ## Explicitly deferred
 
@@ -793,7 +786,7 @@ Studio session using owned test animations:
 
 ## Finalized decisions and remaining gates
 
-There are no open design blockers for CP-TA1 or CP-TA2. The binding decisions are:
+There are no open design blockers for CP-TA1, CP-TA2, or CP-TA3. The binding decisions are:
 
 1. `trackKey` is the public logical/backend identity. AnimGraph adds only
    `setTrackPosition(trackKey, AnimationPosition)` and `trackCompleted`; it exposes no package
@@ -827,6 +820,6 @@ There are no open design blockers for CP-TA1 or CP-TA2. The binding decisions ar
 12. Lune 0.8.9 is the deterministic runner. The checked-in loader smoke is a mandatory execution
      entrance gate before source work, not an unresolved design decision.
 
-The remaining gates are CP-TA3 verification and consumer-readiness review, Studio-only engine
-observations, and the later separate VoxelMMO migration proofs. The project-local Lune entrance gate
-and CP-TA1/CP-TA2 implementation and operator review are complete.
+The remaining work is the separate VoxelMMO timing-composition proof set and any later release
+decision. The project-local Lune entrance gate, CP-TA1/CP-TA2 implementation, and CP-TA3 operator
+review are complete. Package publication and version decisions remain deferred.

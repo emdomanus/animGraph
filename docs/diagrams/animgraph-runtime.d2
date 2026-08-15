@@ -1,0 +1,117 @@
+# Canonical source for docs/assets/animgraph-runtime.svg.
+# Run `npm run docs:diagrams`; do not edit the generated SVG by hand.
+
+...@site-theme
+
+grid-rows: 2
+grid-gap: 60
+
+classes: {
+  public-contract: {
+    style: {
+      stroke-dash: 7
+      stroke-width: 2
+    }
+  }
+  backend-private: {
+    style: {
+      stroke-dash: 2
+      stroke-width: 2
+    }
+  }
+  owns: {
+    style.stroke-width: 2
+    source-arrowhead: {
+      shape: diamond
+      style.filled: true
+    }
+  }
+  calls: {
+    style.stroke-width: 2
+  }
+  data: {
+    style: {
+      stroke-dash: 5
+      stroke-width: 2
+    }
+  }
+  contract: {
+    style: {
+      stroke-dash: 9
+      stroke-width: 2
+    }
+    target-arrowhead.shape: triangle
+  }
+  completion: {
+    style: {
+      stroke-dash: 2
+      stroke-width: 2
+    }
+  }
+}
+
+caller: "Caller-owned boundary" {
+  direction: right
+  scheduler: "Caller scheduler\nphase / cadence"
+  time-source: "TimeSource\nborrowed frame coordinate"
+  logical-time-reader: "LogicalTimeReader\nborrowed logical position"
+  input-seam: "Controller input seam\nupdate call + borrowed functions"
+  input-seam.class: public-contract
+
+  scheduler -> input-seam: "invokes update()" {class: calls}
+  time-source -> input-seam: "borrowed function" {class: data}
+  logical-time-reader -> input-seam: "borrowed function" {class: data}
+}
+
+controller: "Controller ownership" {
+  direction: right
+  animation-controller: "AnimationController\nsample - evaluate - validate"
+  parameter-store: "ParameterStore\nvalues + triggers"
+  event-bus: "EventBus\nsnapshot callbacks"
+  layer-runtime: "LayerRuntime instances\nreader baseline + layer composition"
+}
+
+backend: "Backend ownership" {
+  direction: down
+  animation-backend: "AnimationBackend contract"
+  animation-backend.class: public-contract
+  roblox-backend: "RobloxAnimatorBackend\npriority + generation owner"
+  anim-playback: "AnimPlayback generations\nactive - retiring - completed"
+  anim-playback.class: backend-private
+  animation: "Roblox Animation\nprivate asset instance"
+  animation.class: backend-private
+  animation-track: "Roblox AnimationTrack\nprivate physical playback"
+  animation-track.class: backend-private
+}
+
+graph: "Graph evaluation" {
+  direction: left
+  implementations: "MotionNode implementations" {
+    grid-columns: 2
+    clip-node: ClipNode
+    blend-1d: Blend1DNode
+    blend-2d: Blend2DNode
+    state-machine: "StateMachineRuntime\nstates + weighted transitions"
+  }
+  motion-node: "MotionNode contract"
+  motion-node.class: public-contract
+  clip-requests: "ClipRequest batch"
+
+  implementations -> motion-node: "conform structurally" {class: contract}
+  motion-node -> clip-requests: produces {class: data}
+}
+
+caller.input-seam -> controller.animation-controller: {class: data}
+
+controller.animation-controller -> controller.parameter-store: owns {class: owns}
+controller.animation-controller -> controller.event-bus: owns {class: owns}
+controller.animation-controller -> controller.layer-runtime: owns {class: owns}
+controller.parameter-store -> controller.layer-runtime: "parameter reads" {class: data}
+
+controller.layer-runtime -> graph.motion-node: evaluate {class: calls}
+
+graph.clip-requests -> backend.animation-backend: apply {class: data}
+backend.animation-backend -> backend.roblox-backend: "implemented by" {class: contract}
+backend.roblox-backend -> backend.anim-playback: "owns generations" {class: owns}
+backend.anim-playback -> backend.animation: creates {class: owns}
+backend.anim-playback -> backend.animation-track: loads {class: owns}

@@ -7,13 +7,15 @@ export default defineConfig({
 	cleanUrls: true,
 	themeConfig: {
 		nav: [
-			{ text: "Guide", link: "/guides/getting-started" },
+			{ text: "AnimGraph", link: "/" },
+			{ text: "Guides", link: "/guides/" },
 			{ text: "API", link: "/api/" },
 			{ text: "Architecture", link: "/architecture" },
 		],
 		sidebar: [
 			{
-				text: "Overview",
+				text: "AnimGraph",
+				collapsed: true,
 				items: [
 					{ text: "AnimGraph", link: "/" },
 					{ text: "Architecture", link: "/architecture" },
@@ -21,32 +23,72 @@ export default defineConfig({
 			},
 			{
 				text: "Guides",
+				collapsed: true,
 				items: [
+					{ text: "Overview", link: "/guides/" },
 					{ text: "Getting Started", link: "/guides/getting-started" },
 					{ text: "Motions", link: "/guides/motions" },
 					{ text: "State Machines", link: "/guides/state-machines" },
 					{ text: "Dev Harness", link: "/guides/dev-harness" },
+					{ text: "Verification", link: "/guides/verification" },
+					{ text: "Studio Verification", link: "/guides/studio-verification" },
 				],
 			},
 			{
 				text: "API",
+				collapsed: true,
 				items: [
-					{ text: "API Index", link: "/api/" },
-					{ text: "AnimationController", link: "/api/controllers/animationController" },
-					{ text: "ClipNode", link: "/api/motions/clipNode" },
-					{ text: "Blend1DNode", link: "/api/motions/blend1DNode" },
-					{ text: "Blend2DNode", link: "/api/motions/blend2DNode" },
-					{ text: "StateMachineRuntime", link: "/api/runtimes/stateMachineRuntime" },
-					{ text: "RobloxAnimatorBackend", link: "/api/backends/robloxAnimatorBackend" },
-					{ text: "StackModifier", link: "/api/components/stackModifier" },
-					{ text: "Type Index", link: "/api/types/" },
-					{ text: "Definitions", link: "/api/types/definitions" },
+					{ text: "Package Root", link: "/api/" },
+					{
+						text: "backends/",
+						collapsed: true,
+						items: [{ text: "robloxAnimatorBackend", link: "/api/backends/robloxAnimatorBackend" }],
+					},
+					{
+						text: "components/",
+						collapsed: true,
+						items: [{ text: "stackModifier", link: "/api/components/stackModifier" }],
+					},
+					{
+						text: "controllers/",
+						collapsed: true,
+						items: [{ text: "animationController", link: "/api/controllers/animationController" }],
+					},
+					{
+						text: "motions/",
+						collapsed: true,
+						items: [
+							{ text: "blend1DNode", link: "/api/motions/blend1DNode" },
+							{ text: "blend2DNode", link: "/api/motions/blend2DNode" },
+							{ text: "clipNode", link: "/api/motions/clipNode" },
+						],
+					},
+					{
+						text: "runtimes/",
+						collapsed: true,
+						items: [{ text: "stateMachineRuntime", link: "/api/runtimes/stateMachineRuntime" }],
+					},
+					{
+						text: "types/",
+						collapsed: true,
+						items: [
+							{ text: "type index", link: "/api/types/" },
+							{ text: "definitions", link: "/api/types/definitions" },
+						],
+					},
 				],
 			},
 			{
-				text: "Research and TODO",
+				text: "Design / Research",
+				collapsed: true,
 				items: [
 					{ text: "VoxelMMO Migration", link: "/research/voxelmmo-migration" },
+				],
+			},
+			{
+				text: "TODO",
+				collapsed: true,
+				items: [
 					{ text: "TODO Index", link: "/todo/" },
 					{ text: "Temporal Amendment", link: "/todo/temporalAmendment" },
 					{ text: "Backlog", link: "/todo/backlog" },

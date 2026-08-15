@@ -1,122 +1,169 @@
+---
+aside: false
+sidebar: false
+pageClass: architecture-page
+---
+
 # Architecture
 
-AnimGraph is an authored, sampled graph runtime. The caller schedules each
-sample; the controller owns coherent logical-time sampling and graph evaluation;
-the backend owns concrete animation materialization.
+AnimGraph is an authored, sampled graph runtime. A caller owns the cadence and
+borrows plain timing functions; `AnimationController` owns one coherent graph
+sample; and an injected backend owns concrete playback. The package never
+owns a clock, scheduler connection, character policy, or consumer playback
+handle.
 
-## Ownership
+<script setup>
+import runtimeDiagram from "./assets/animgraph-runtime.svg";
+import completionDiagram from "./assets/animgraph-completion.svg";
+</script>
+
+<ZoomableDiagram
+  :src="runtimeDiagram"
+  alt="AnimGraph runtime ownership, evaluation, materialization, and completion flow"
+  height="min(78vh, 920px)"
+/>
+
+The graph is generated from `docs/diagrams/animgraph-runtime.d2` after auditing
+the committed source under `src/animGraph`. Relationship labels state the
+interaction directly: diamonds denote ownership, solid arrows denote calls,
+dashed arrows carry data or structural conformance, and dotted arrows return
+completion. Dashed node borders identify contracts; tightly dotted node borders
+identify backend-private objects. `AnimPlayback`, `Animation`, and
+`AnimationTrack` never cross the public boundary.
+
+The cyclic completion route is generated separately so it remains legible
+without routing a return edge across the forward evaluation graph. Its nodes
+are short references to the same runtime objects, not additional instances.
+
+<ZoomableDiagram
+  :src="completionDiagram"
+  alt="AnimGraph backend completion classification, tombstone, controller, and event flow"
+  height="min(46vh, 420px)"
+/>
+
+Use the toolbar to fit either diagram or return to its native vector size.
+Drag with a pointer, use the arrow keys after focusing the viewer, or hold
+Control/Command while scrolling to zoom around the cursor. The default view
+fits the complete diagram without clipping.
+
+## Ownership and responsibilities
+
+| Role | Constructed by | Lifecycle owner | Consumes | Produces or exposes |
+| --- | --- | --- | --- | --- |
+| Caller-owned scheduler | Consumer code | Consumer code | Its chosen phase/cadence | Calls `controller:update()`; disconnects its own connection |
+| `TimeSource` and `LogicalTimeReader` | Consumer code | Consumer code | A frame sample supplied by the caller | Borrowed finite time coordinates; AnimGraph never subscribes to or destroys them |
+| `AnimationController` | `AnimGraph.new` or `animationController.new` | Caller that created it | Scheduler calls, timing functions, layer definitions, parameters, and a backend | Coherent reader samples, graph evaluation, request validation, and controller events |
+| `ParameterStore` | `AnimationController` | `AnimationController` | Raw, float, bool, and trigger parameter writes | Values and trigger consumption for motion evaluation |
+| `EventBus` | `AnimationController` | `AnimationController` | State, transition, and backend completion events | Snapshot-dispatched public controller callbacks |
+| `LayerRuntime` instances | `AnimationController:addLayer` | `AnimationController` | One active motion, selected reader, baseline, and layer settings | `MotionEvaluateContext`; layer-composed `ClipRequest` records |
+| `MotionNode` contract | Caller-authored constructors | Caller-owned graph configuration | Evaluation context and parameters | One or more backend-neutral requests; `ClipNode`, blends, and state machines conform structurally |
+| `StateMachineRuntime` | Caller through `stateMachine` | Caller-owned active graph, reached through its layer | Parameters, triggers, and logical `dt` | State/transition events and weighted child requests |
+| `ClipRequest` batch | `LayerRuntime` evaluation | Held by the current update only | Motion output plus layer composition | Validated request batch passed to `AnimationBackend` |
+| `AnimationBackend` contract | Caller supplies an implementation | Caller that owns the backend | Request batches and lifecycle commands | Materialization, positioning, capabilities, debug state, and completion binding |
+| `RobloxAnimatorBackend` | Caller through `robloxAnimatorBackend.new` | Caller that owns the backend | `ClipRequest` batches and an `Animator` | Roblox generations, priority mapping, native weight/speed changes, and completion events |
+| `AnimPlayback` generations | `RobloxAnimatorBackend` | `RobloxAnimatorBackend` | A request and resolved asset id | Private physical generation state and guarded engine callbacks |
+| Roblox `Animation` / `AnimationTrack` | `AnimPlayback` | `RobloxAnimatorBackend` through `AnimPlayback` | Asset id, play, fade, weight, speed, position, and priority commands | Physical playback and `Stopped`/`Ended` signals |
+
+`StackModifier` is a public numeric utility, but the source audit shows no
+runtime relationship to this update transaction. It is intentionally absent
+from the graph and is documented separately in the
+[components/stackModifier API page](/api/components/stackModifier).
+
+## Dependency direction
+
+The runtime dependency direction is one-way:
 
 ```text
-Caller
-  owns update phase and cadence
-  owns TimeSource and LogicalTimeReader functions
-  owns timing/discontinuity/rate policy
-  owns AnimationController and injected backend
-    AnimationController owns ParameterStore, EventBus, and LayerRuntime objects
-      LayerRuntime owns one active play and its logical baseline
-    RobloxAnimatorBackend owns active generations, retiring physics, and completed tombstones
+consumer policy
+    -> caller-owned scheduler
+    -> AnimationController
+    -> LayerRuntime / MotionNode evaluation
+    -> AnimationBackend
+    -> Roblox Animator implementation
 ```
 
-AnimGraph never subscribes to the supplied functions and never destroys them.
-It imports no Tempo, TemporalService, clock, timing-binding, or consumer types.
+Public contracts live below `src/animGraph/types`. Runtime implementations use
+script-relative requires. The controller knows the backend contract, but the
+motion nodes know neither Roblox instances nor backend implementation details.
+The Roblox backend knows `Animation` and `AnimationTrack`, while those objects
+never cross the package's public boundary.
 
-## Dependency Direction
+## Sampled update transaction
 
-```text
-consumer policy -> AnimGraph controller -> motion/runtime types -> backend
-                                                    |
-                                                    v
-                                             Roblox Animator
-```
+`controller:update()` is a caller-invoked transaction:
 
-Runtime modules use script-relative requires. Public contracts are declared
-under `src/animGraph/types`; the shared `AnimationPosition`, `TimeSource`,
-`LogicalTimeReader`, `Release`, and `TrackCompletedEvent` definitions have one canonical declaration in
-`src/animGraph/types/def/init.luau`. Implementation-only validation lives under
-`src/animGraph/utils`.
+1. The controller calls the borrowed `TimeSource` exactly once and validates a
+   finite frame coordinate.
+2. Each active `LayerRuntime` selects its play reader, then layer reader, then
+   controller default. Each distinct selected function is called at most once
+   with that shared coordinate.
+3. All logical positions and forward deltas are preflighted against each
+   layer activation's baseline. A non-finite or backward sample rejects before
+   graph or backend mutation.
+4. Baselines are committed, then layers evaluate their motion nodes with the
+   derived logical `dt`. `StateMachineRuntime` advances transitions with that
+   value; layer weight and native speed remain separate composition inputs.
+5. Motion nodes produce `ClipRequest` records. `LayerRuntime` stamps the
+   authoritative `deltaTime`, composes layer weight/speed, and consumes
+   first-emitted play overrides.
+6. The controller validates the complete batch, including unique `trackKey`
+   values and valid positions, then calls `AnimationBackend:apply(requests)`.
 
-## Sample Transaction
+The backend is called on every successful sample, including a zero-delta
+sample. The Roblox implementation ignores delta-only changes when native
+desired state is unchanged, while a custom backend may consume each request's
+`deltaTime`.
 
-Every non-destroyed `controller:update()` performs this sequence:
+## Logical and native domains
 
-1. Call the configured `TimeSource` exactly once and require a finite number.
-2. For every layer with an active play, select its reader with play, layer, then
-   controller-default precedence.
-3. Call each distinct selected reader at most once with the same `frameNow`.
-4. Validate every logical position and compare it with that activation's prior
-   baseline. A non-finite, backward, or non-finite derived delta rejects the
-   entire update.
-5. After all samples pass, commit all new baselines.
-6. Evaluate every configured layer with its derived logical delta, stamping that
-   value onto each `ClipRequest.deltaTime`.
-7. Validate the complete request batch, including unique `trackKey` values and
-   valid initial positions.
-8. Call `backend:apply(requests)`, including when all deltas are zero or no
-   requests were produced.
+Logical time is the sampled graph domain. It advances state machines and blend
+evaluation through `MotionEvaluateContext.dt` and `ClipRequest.deltaTime`.
+Native speed is a separate request value composed from authored request speed
+and layer speed, then passed to the backend. AnimGraph never multiplies logical
+delta by native speed, and a held logical reader does not implicitly stop a
+native Roblox fade.
 
-No graph or backend mutation occurs during reader preflight. Rejected samples do
-not change any prior baseline. Starting a replacement play clears only that
-layer activation's baseline, even when the same reader function is selected.
+Initial and live native positions use the public `AnimationPosition` union.
+Initial placement is one-shot per materialized generation. `setTrackPosition`
+addresses the current generation by `trackKey`, supersedes a pending initial
+position, and does not replay graph history or replace the generation.
 
-## Logical Delta and Native Speed
+## Backend generation lifecycle
 
-`MotionEvaluateContext.dt` and `ClipRequest.deltaTime` are the reader-derived
-logical delta. They advance graph transitions and provide custom backends with a
-sampled integration value.
+`RobloxAnimatorBackend` validates a whole request batch before mutation. It
+keeps one active generation per `trackKey`, retiring generations by monotonic
+generation token, and lightweight completed tombstones by key. A same-key clip
+replacement or `forceRestart` retires the old generation and creates a new
+one; the generations may coexist while the old native fade runs.
 
-`ClipRequest.speed` is independently composed from authored request speed and
-layer speed. AnimGraph never multiplies logical delta by native speed or native
-speed by logical delta. A held reader can pause graph progression while a
-non-zero native speed continues on the Roblox engine timeline.
+`AnimPlayback` creates an `Animation`, loads its `AnimationTrack`, applies
+initial native state, and tracks pending-length positioning. Changed native
+weight, speed, loop, or priority updates only that property. Unchanged desired
+state does not replay, reposition, restart a fade, or create a generation.
 
-## Layers and Motions
+Retirement invalidates natural-completion classification before `Stop(fade)`.
+`Ended` owns final physical cleanup for non-zero fades; zero-fade or already
+inactive generations clean immediately. Generation tokens make stale engine
+signals harmless to newer generations.
 
-A `LayerRuntime` owns one active motion, state label, play overrides, reader
-selection, and baseline. It applies layer weight and speed to emitted requests.
-Motion nodes remain backend-neutral and return `ClipRequest` records; they never
-load or mutate Roblox tracks.
+## Completion and teardown
 
-Built-in nodes are `ClipNode`, `Blend1DNode`, `Blend2DNode`, and
-`StateMachineRuntime`. Stateful motions such as state machines should be created
-per independent graph activation.
+Natural non-looping playback and accepted terminal initial/live positioning are
+committed as completion exactly once. The backend stores a completed tombstone,
+then forwards `trackCompleted` through the controller's bound callback into
+its `EventBus`. Event dispatch snapshots listeners, so callbacks may re-enter
+playback operations without mutating stale generation state.
 
-## Backend Materialization
+Explicit stop, request disappearance, replacement, restart retirement, `clear`,
+and `destroy` suppress completion. A looping track never completes merely by
+crossing a loop boundary.
 
-The `AnimationBackend` structural interface receives request batches without a
-controller-wide delta argument. A custom backend can use each request's
-`deltaTime`; the shipped Roblox backend intentionally ignores delta-only changes
-when native desired state is unchanged.
+`clear()` stops layer intent, clears parameters, and establishes the backend's
+immediate physical boundary. `destroy()` first releases the controller's one
+backend completion binding, then clears the controller/event bus and destroys
+the backend. The caller disconnects its scheduler before or alongside this
+teardown. No package-owned object retains the caller's timing functions.
 
-The Roblox backend owns one active materialized generation per `trackKey`. It
-validates a whole batch before loading or mutating tracks. Each physical
-generation has a monotonic token, while retiring generations are held by token
-so a new generation with the same key can coexist during a fade. That private
-state provides:
-
-- one-shot initial positioning after `Play` and positive length resolution;
-- exact non-looping clamp and looping wrap behavior;
-- `forceRestart` and same-key clip replacement as explicit new physical generations;
-- no redundant `Play`, position write, weight/speed adjustment, property write,
-  or fade restart for unchanged desired state;
-- backend-neutral live positioning without replaying or replacing a live generation;
-- one completion event for natural or accepted terminal non-looping playback;
-- a lightweight completed tombstone that retains only key, clip, layer/state,
-  and generation identity after physical cleanup, preventing unchanged replay.
-
-`Stopped` classifies completion only while its captured token is still the
-active non-looping generation. Explicit retirement invalidates that
-classification before calling `Stop(fadeTime)`. `Ended` owns final signal,
-`AnimationTrack`, and `Animation` cleanup after non-zero fades; zero-fade and
-already-inactive retirement clean immediately. Completion is committed before
-subscriber dispatch, and both backend and controller event buses snapshot
-listeners so synchronous re-entry cannot mutate a stale generation.
-
-## Hard Boundaries
-
-`clear()` and `destroy()` remain physical lifecycle boundaries. The package does
-not promise to retain backend tracks or a consumer playback handle across them.
-Both use immediate zero-fade cleanup, remove completed tombstones, and suppress
-completion from retired physics. Controller destruction first releases its one
-backend completion binding.
-The controller owns no `RunService` connection; consumers disconnect their own
-scheduler before destruction when appropriate.
+For task-oriented usage, start with the [guide overview](/guides/) or
+[getting started](/guides/getting-started). For exact callable and type
+contracts, use the [API index](/api/).

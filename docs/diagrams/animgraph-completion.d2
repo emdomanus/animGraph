@@ -1,0 +1,40 @@
+# Companion completion path for the objects defined in animgraph-runtime.d2.
+# Run `npm run docs:diagrams`; do not edit the generated SVG by hand.
+
+...@site-theme
+
+direction: right
+
+classes: {
+  backend-private: {
+    style: {
+      stroke-dash: 2
+      stroke-width: 2
+    }
+  }
+  completion: {
+    style: {
+      stroke-dash: 2
+      stroke-width: 2
+    }
+  }
+}
+
+completion: "Completion return path" {
+  direction: right
+
+  animation-track: AnimationTrack
+  animation-track.class: backend-private
+  anim-playback: AnimPlayback
+  anim-playback.class: backend-private
+  roblox-backend: RobloxAnimatorBackend
+  tombstone: "Completed tombstone\nlightweight generation identity"
+  animation-controller: AnimationController
+  event-bus: EventBus
+
+  animation-track -> anim-playback: "Stopped / Ended" {class: completion}
+  anim-playback -> roblox-backend: "classified completion" {class: completion}
+  roblox-backend -> tombstone: "commit exactly once" {class: completion}
+  roblox-backend -> animation-controller: trackCompleted {class: completion}
+  animation-controller -> event-bus: "snapshot dispatch" {class: completion}
+}

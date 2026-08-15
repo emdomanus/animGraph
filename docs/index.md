@@ -11,11 +11,11 @@ read logical time at one shared frame coordinate.
 
 ## Start Here
 
+- [Guide overview](/guides/)
 - [Getting started](/guides/getting-started)
 - [Architecture and ownership](/architecture)
 - [Public API](/api/)
 - [Public type index](/api/types/)
-- [Canonical shared definitions](/api/types/definitions)
 - [Dev harness](/guides/dev-harness)
 
 ## Runtime Model
@@ -58,8 +58,9 @@ AnimGraph does not own character spawning, combat, VFX, network replication,
 timing bindings, clock rate/discontinuity policy, or target rematerialization
 across a game-owned playback handle. Those concerns belong in consumer code.
 
-## Engineering Work
+## Documentation map
 
-- [Active temporal amendment](/todo/temporalAmendment)
-- [TODO index](/todo/)
-- [VoxelMMO consumer research](/research/voxelmmo-migration)
+- [Verification](/guides/verification) owns the deterministic and static gate inventory.
+- [Studio verification](/guides/studio-verification) owns the engine-only checklist and CP-TA3 record.
+- [Temporal amendment](/todo/temporalAmendment) preserves completed design and checkpoint history.
+- [VoxelMMO consumer research](/research/voxelmmo-migration) records integration requirements only.

@@ -28,17 +28,6 @@ hard clear boundary. Completion appears in the console. The debug panel reports
 generation, active/retiring/completed lifecycle, and whether physical ownership
 is still present so fade and cleanup ordering are observable.
 
-Run deterministic and static checks from the repository root:
-
-```sh
-lune run tests/lune/run.luau
-stylua --check src dev tests
-selene src dev tests
-npm run docs:build
-```
-
-For Roblox-aware analysis and require-graph validation:
-
-```powershell
-.\scripts\check-luau.ps1
-```
+Use the [verification guide](./verification.md) for the deterministic and
+static commands. Studio-only observations belong in the
+[Studio checklist](./studio-verification.md).

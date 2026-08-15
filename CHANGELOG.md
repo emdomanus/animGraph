@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recorded operator-reviewed CP-TA3 closure: the 51-test deterministic/static
+  gate and all 12 Studio cases passed; VoxelMMO timing proofs and release
+  decisions remain deferred.
 - Added canonical `TrackCompletedEvent`, the discriminated `AnimationEvent`
   union, `controller:setTrackPosition`, and backend live-position/completion
   ports; removed the unused `motionRequested` event name.

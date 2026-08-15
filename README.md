@@ -246,15 +246,17 @@ Controller methods:
 
 ## Next Slices
 
-Further verification and consumer integration are tracked in the checkpointed
+Further design history and consumer integration are tracked in the checkpointed
 [temporal amendment](docs/todo/temporalAmendment.md) and
-[backlog](docs/todo/backlog.md). CP-TA2 is implemented and awaiting operator
-review; package publishing and VoxelMMO migration remain separate work.
+[backlog](docs/todo/backlog.md). CP-TA3 is operator-reviewed and complete;
+package publishing, version decisions, and VoxelMMO migration remain separate
+work.
 
 ## Development
 
-Run the deterministic, formatting, lint, type, and documentation checks from
-the repository root:
+Run the deterministic, formatting, lint, Luau-analysis, and documentation
+checks from the repository root. The complete gate inventory and the 51-test
+baseline are in the [verification guide](docs/guides/verification.md):
 
 ```sh
 lune run tests/lune/run.luau
