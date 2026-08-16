@@ -31,10 +31,26 @@ then applies once after `Play`:
 
 - non-looping seconds clamp to `[0, Length]`;
 - non-looping normalized values map to the same inclusive interval;
-- an exact or beyond-terminal non-looping value lands at `Length` and prevents
-  the unchanged materialization from replaying;
 - looping seconds wrap modulo length;
 - looping normalized `1` canonicalizes to zero.
+
+Non-looping boundary classification uses the request's desired signed speed:
+
+| Resolved position | Desired speed | Result |
+| --- | --- | --- |
+| `Length` | positive | completed |
+| `Length` | negative | active, moving inward |
+| `0` | negative | completed |
+| `0` | positive | active, moving inward |
+| either boundary | zero | active, held |
+| interior | any finite value | active |
+
+For a known-length reverse start, `Play` receives the desired negative speed
+before the exact upper position is written. For an unknown-length reverse start,
+`Play` receives `0`; the backend retains the desired negative speed, waits for a
+positive length, writes the requested upper position exactly once, and then
+calls `AdjustSpeed` with the retained value. It does not replay, replace, or
+change generation during resolution.
 
 `forceRestart` creates a new internal materialization generation. An explicit
 `initialPosition` wins; without one, the new generation starts at zero.
@@ -49,8 +65,13 @@ nothing.
 
 Forward and backward positions preserve generation, clip, loop setting, speed,
 weight target, priority, and completion subscription. Non-looping exact or
-beyond-terminal positions clamp to `Length` and complete once. Looping seconds
-wrap modulo length and normalized `1` canonicalizes to zero without completion.
+beyond-upper positions clamp to `Length`; lower and upper completion follows the
+same desired-speed table as initial placement. Looping seconds wrap modulo length
+and normalized `1` canonicalizes to zero without completion.
+
+A live speed change uses only `AdjustSpeed`. It does not seek, call `Play`, change
+the key, or replace the generation. At an exact non-looping boundary an outward
+pivot completes once; an inward or zero pivot remains active.
 
 ## Idempotence
 
@@ -58,8 +79,9 @@ For unchanged native desired state, repeated `apply` calls do not reload, replay
 rewrite position, churn an internal generation, adjust weight/speed, rewrite
 loop/priority, or restart a fade. A delta-only request change remains visible to
 custom backends but has no native Roblox operation. Resolving one pending
-position after length becomes available is the sole permitted change during an
-otherwise unchanged apply.
+position after length becomes available is the only permitted position change
+during an otherwise unchanged apply. A held pending reverse start also applies
+its retained speed once after that position write.
 
 ## Generations and Completion
 
@@ -75,12 +97,13 @@ request keeps the tombstone and cannot replay. A validated omission, different
 clip, `forceRestart`, `clear`, or `destroy` retires it according to the public
 contract.
 
-`bindToTrackCompleted(callback)` observes natural non-looping terminal playback
-and accepted initial/live terminal placement. Completion is latched before
-dispatch and fires once. Explicit stop, request disappearance, replacement,
-restart retirement, clear, and destroy suppress completion. Dispatch snapshots
-listeners, so callbacks may synchronously mutate playback, positioning,
-lifecycle, or subscriptions.
+`bindToTrackCompleted(callback)` observes natural non-looping forward completion
+at the upper end, natural reverse completion at the lower end, and accepted
+initial/live outward boundary placement. Completion is latched before dispatch
+and fires once. Explicit stop, request disappearance, replacement, restart
+retirement, clear, and destroy suppress completion. Dispatch snapshots listeners,
+so callbacks may synchronously mutate playback, positioning, lifecycle, or
+subscriptions.
 
 ## Fade Retirement and Cleanup
 

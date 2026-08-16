@@ -10,12 +10,14 @@ not prove behavior that depends on real `AnimationTrack` signals or timing.
 lune run tests/lune/run.luau
 ```
 
-The expected baseline is **51/51 tests** across the smoke, controller, and
+The expected baseline is **59/59 tests** across the smoke, controller, and
 Roblox-backend seam suites. The suite proves the typed event boundary, sampled
 reader selection and baselines, atomic preflight, request validation, motion
 evaluation, initial/live positioning semantics, idempotent apply, generation
-retirement, tombstones, completion dispatch, stale-signal suppression, and
-re-entrant lifecycle behavior through fakes. It does not create a real Roblox
+retirement, tombstones, completion dispatch, stale-signal suppression, re-entrant
+lifecycle behavior, the signed boundary table, known/pending reverse-start call
+order, seek-free sign pivots, natural reverse completion, reverse looping, and
+reverse rematerialization through fakes. It does not create a real Roblox
 `Animator`.
 
 ## Formatting, lint, and Luau analysis
@@ -69,12 +71,14 @@ the SVG palette follows the site's light and dark appearances.
 ## Engine-only evidence
 
 The [Studio Verification](./studio-verification.md) page is the canonical
-record for the Rojo-connected Studio checklist and CP-TA3 operator results.
-Studio evidence is intentionally separate from the 51 deterministic tests and
-from static analysis. It covers native `AnimationTrack` length, signal order,
-fade timing, physical cleanup, loop behavior, and re-entry that host fakes
-cannot establish.
+record for the Rojo-connected Studio checklist and the CP-TA3 and CP-AG-R
+operator results. Studio evidence is intentionally separate from the current
+59 deterministic tests and from static analysis. It covers native
+`AnimationTrack` length, signal order, fade timing, physical cleanup, loop
+behavior, and re-entry that host fakes cannot establish.
 
 CP-TA3 is operator-reviewed and complete. The VoxelMMO timing-composition
 proofs, package publication, and version decision remain separate follow-on or
-release decisions; this page does not claim them as completed.
+release decisions. CP-AG-R reverse-terminal Studio acceptance is also complete
+by authoritative operator report; the 59 deterministic tests remain separate
+package proof rather than a substitute for that engine evidence.

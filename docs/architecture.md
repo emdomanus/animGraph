@@ -128,6 +128,15 @@ Initial placement is one-shot per materialized generation. `setTrackPosition`
 addresses the current generation by `trackKey`, supersedes a pending initial
 position, and does not replay graph history or replace the generation.
 
+At a non-looping boundary, completion is classified against desired signed native
+speed: positive is outward only at `Length`, negative is outward only at `0`, and
+zero holds either boundary active. Interior positions remain active. Looping
+positions wrap and never complete from addressing. A known-length reverse start
+activates negative speed through `Play` before the upper position write; an
+unknown-length reverse start holds `Play` at zero until one resolved position
+write, then adopts the retained negative speed without replay or generation
+change. Later sign pivots use only `AdjustSpeed`.
+
 ## Backend generation lifecycle
 
 `RobloxAnimatorBackend` validates a whole request batch before mutation. It
@@ -139,7 +148,9 @@ one; the generations may coexist while the old native fade runs.
 `AnimPlayback` creates an `Animation`, loads its `AnimationTrack`, applies
 initial native state, and tracks pending-length positioning. Changed native
 weight, speed, loop, or priority updates only that property. Unchanged desired
-state does not replay, reposition, restart a fade, or create a generation.
+state does not replay, reposition, restart a fade, or create a generation. The
+only pending-reverse exception is the ordered position write and retained-speed
+application after positive length becomes available.
 
 Retirement invalidates natural-completion classification before `Stop(fade)`.
 `Ended` owns final physical cleanup for non-zero fades; zero-fade or already
@@ -148,10 +159,11 @@ signals harmless to newer generations.
 
 ## Completion and teardown
 
-Natural non-looping playback and accepted terminal initial/live positioning are
+Natural non-looping forward playback at the upper end, natural reverse playback
+at the lower end, and accepted outward initial/live boundary positioning are
 committed as completion exactly once. The backend stores a completed tombstone,
-then forwards `trackCompleted` through the controller's bound callback into
-its `EventBus`. Event dispatch snapshots listeners, so callbacks may re-enter
+then forwards `trackCompleted` through the controller's bound callback into its
+`EventBus`. Event dispatch snapshots listeners, so callbacks may re-enter
 playback operations without mutating stale generation state.
 
 Explicit stop, request disappearance, replacement, restart retirement, `clear`,

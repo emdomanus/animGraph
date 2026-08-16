@@ -306,6 +306,21 @@ canonical declarations; they do not redeclare structurally similar public types.
 
 ### Position validation and terminal behavior
 
+CP-AG-R amends the original CP-TA boundary rule below: terminal completion is
+direction-aware and uses desired signed native speed. The public position and
+completion APIs are unchanged.
+
+**CP-AG-R closure status: complete and operator-accepted.** On 2026-08-15, the
+operator manually completed the documented Studio matrix and reported that all
+signed initial/live boundaries, known- and unknown-length reverse startups, the
+unresolved `0 -> negative` transition, seek-free live sign pivots,
+outward-boundary exact-once completion, natural reverse completion and cleanup,
+and reverse looping with native `DidLoop` but no forwarded completion passed.
+The closure handoff supplied no place/build, execution-role, rig, asset, log, or
+video metadata, and this amendment does not invent it. This acceptance adds no
+public API and does not claim continuous reverse logical graph traversal,
+marker forwarding, VoxelMMO integration, publication, or dependency-pin work.
+
 - Both the controller operation and a directly used backend validate `AnimationPosition` before
   mutation. `kind` must be exactly `"seconds"` or `"normalized"`; `value` must be finite; seconds
   must be non-negative; normalized values must be in the inclusive range `[0, 1]`.
@@ -314,9 +329,10 @@ canonical declarations; they do not redeclare structurally similar public types.
 - Initial and live positions remain pending until the backend knows a positive track length. This
   gives both seconds and normalized addressing deterministic clamping/wrapping behavior.
 - For a non-looping track, seconds clamp to `[0, Length]` and normalized values map to that same
-  inclusive range. An accepted initial or live position at the exact terminal boundary, or a seconds
-  value beyond it, places the track at `Length`, latches the generation completed, and emits exactly
-  one `trackCompleted` after internal state is committed.
+  inclusive range. An accepted upper boundary completes only when desired speed is positive; an
+  accepted lower boundary completes only when desired speed is negative. The opposite sign points
+  inward, zero holds either boundary active, and interior positions remain active. Completion emits
+  exactly one `trackCompleted` after internal state is committed.
 - For a looping track there is no terminal completion. Seconds wrap modulo `Length`; normalized `1`
   canonicalizes to `0`; addressing never emits `trackCompleted` merely because it crosses a loop
   boundary.
@@ -333,6 +349,10 @@ canonical declarations; they do not redeclare structurally similar public types.
   key. The backend, not per-frame graph evaluation, enforces the one-write rule.
 - A pending initial position is applied once when length becomes available unless superseded by a
   valid live position command or retirement.
+- A known-length reverse start applies negative speed through `Play` before its exact upper position
+  write. An unknown-length reverse start uses `Play` speed `0`, retains the desired negative speed,
+  writes the requested upper position once after positive length, then applies the retained speed
+  without replay or generation change.
 - `forceRestart` remains an explicit one-shot activation command. It creates a new generation. When
   the request also contains `initialPosition`, that position is the new generation's starting
   position; otherwise the generation starts at zero. The explicit initial position therefore takes
@@ -346,8 +366,9 @@ canonical declarations; they do not redeclare structurally similar public types.
   weight combination, partial apply, or order-dependent behavior.
 - For the same live generation, a semantically unchanged request produces no new `Play`, position
   write, activation generation, signal subscription, `AdjustWeight`, or `AdjustSpeed` call. In
-  particular, it cannot restart a fade. Polling positive length and applying one pending position is
-  the sole allowed state change from an otherwise unchanged apply.
+  particular, it cannot restart a fade. The only permitted pending state changes from an otherwise
+  unchanged apply are one position write after positive length and, for a held reverse start, one
+  retained-speed application after that write.
 - A logical-delta-only change is available to a custom backend through `ClipRequest.deltaTime` but
   does not make the Roblox backend reapply native speed or weight.
 - A changed effective Roblox weight, speed, loop flag, or priority updates only that property. It
@@ -359,7 +380,8 @@ canonical declarations; they do not redeclare structurally similar public types.
   It returns `true` when a valid command is accepted, including a command queued pending length, and
   `false` when the key is unknown, retiring, completed, or the controller/backend is destroyed.
 - The command preserves the logical/content-facing playback identity, current loop setting, speed,
-  weight target, priority, and completion subscription. Except for terminal handling, it does not
+  weight target, priority, and completion subscription. Direction-aware terminal handling is the
+  only completion classification; the command does not
   call `Play`, recreate the `AnimationTrack`, emit state transitions, synthesize markers, or
   reconstruct state-machine history.
 - A live command supersedes any unapplied initial position, and later evaluations cannot snap the
@@ -369,8 +391,9 @@ canonical declarations; they do not redeclare structurally similar public types.
 
 ### Completion, tombstones, and callback re-entrancy
 
-- `trackCompleted` means that the current non-looping generation reached its terminal boundary by
-  native forward playback or by an accepted initial/live terminal position. It fires once.
+- `trackCompleted` means that the current non-looping generation reached the upper boundary through
+  native forward playback, reached the lower boundary through native reverse playback, or accepted
+  an initial/live boundary whose desired speed points outward. It fires once.
 - Explicit `stopLayer`, disappearance from the desired request set, same-key clip replacement,
   `clear`, and `destroy` suppress completion for the retired generation.
 - A looping track does not complete because it loops; `DidLoop` is not completion.
@@ -654,13 +677,16 @@ publication/version decisions remain deferred.
 | Initial seconds | Same request evaluated repeatedly | Position is validated and written once for the materialized generation. | Backend-seam Lune spec |
 | Initial normalized | Length starts at zero, then becomes available | One pending position is applied once; no repeated writes. | Backend seam + Studio |
 | Invalid position | Invalid kind/range/non-finite value through controller or direct backend | Contract error occurs before pending/live mutation. | Lune spec |
-| Initial non-loop terminal | Exact normalized `1` or seconds at/beyond known length | Position clamps to `Length`, generation latches completed once, and later unchanged apply cannot replay it. | Backend seam + Studio |
+| Initial non-loop upper boundary | Exact normalized `1` or seconds at/beyond known length | Position clamps to `Length`; positive speed completes once, while negative or zero speed remains active. | Backend seam + Studio |
+| Initial non-loop lower boundary | Exact zero position | Negative speed completes once, while positive or zero speed remains active. | Backend seam + Studio |
+| Pending reverse start | Negative-speed initial position while length is zero | `Play` uses speed `0`; one resolved position write precedes one retained negative-speed apply with no replay or generation churn. | Backend seam + Studio |
 | Initial loop terminal | Normalized `1` or seconds at a length multiple | Position canonicalizes/wraps to zero and does not complete. | Backend seam + Studio |
 | Initial supersession | Live position arrives before pending initial resolves | Live position wins permanently. | Backend seam + Studio |
 | Live position | Forward then backward position on an active key | Same logical/materialized generation remains; speed/weight/loop/priority are preserved. | Backend seam + Studio |
-| Live non-loop terminal | Live position reaches exact/beyond terminal | One completion after state commit; completed tombstone refuses later positioning and unchanged apply. | Backend seam + Studio |
+| Live non-loop boundary | Live position reaches exact lower or upper boundary | Only outward desired speed completes after state commit; inward or zero remains active. A completed tombstone refuses later positioning and unchanged apply. | Backend seam + Studio |
+| Live sign pivot | Desired speed crosses zero in the interior or at a boundary | Same generation receives only changed `AdjustSpeed`; no seek or replay; an exact boundary completes only when the new sign points outward. | Backend seam + Studio |
 | Missing position | Unknown, retiring, completed, or destroyed key | Method returns `false` and creates nothing. | Lune spec |
-| Natural completion | Non-looping track reaches its end while request remains | One `trackCompleted`; physical objects clean up; tombstone prevents automatic replay. | Backend seam + Studio |
+| Natural completion | Non-looping track reaches the upper end forward or lower end in reverse while request remains | One `trackCompleted`; physical objects clean up; tombstone prevents automatic replay. | Backend seam + Studio |
 | Tombstone lifetime | Same request remains, disappears, restarts, or changes clip | Tombstone remains only while needed to prevent replay and is removed by the specified presence/restart/clear boundaries. | Lune spec |
 | Looping | Track crosses one or many loop boundaries | No `trackCompleted`; playback remains live. | Studio |
 | Explicit stop | `stopLayer`, missing request, replacement, clear, or destroy | No `trackCompleted`; the selected fade and cleanup owner match the contract. | Backend seam + Studio |
@@ -799,12 +825,13 @@ There are no open design blockers for CP-TA1, CP-TA2, or CP-TA3. The binding dec
    and any backward/non-finite sample rejects the whole update before graph/backend mutation. Large
    forward steps are not classified; continuous reverse graph traversal is not claimed.
 4. One `AnimationPosition` union serves initial and live positioning. Validation, looping rules, and
-   exact non-loop terminal completion are fixed; the two numeric legacy fields are deleted without
-   aliases. On `forceRestart`, an explicit `initialPosition` wins; zero is only the absent-position
-   default.
+   direction-aware non-loop boundary completion are fixed; the two numeric legacy fields are deleted
+   without aliases. On `forceRestart`, an explicit `initialPosition` wins; zero is only the
+   absent-position default.
 5. Every request batch has unique `trackKey` values and rejects duplicates before mutation.
 6. Repeated apply is idempotent for an unchanged live generation.
-7. Natural or explicitly addressed non-loop terminal state emits one completion after state commit.
+7. Natural forward upper-end, natural reverse lower-end, or explicitly addressed outward non-loop
+   boundary state emits one completion after state commit.
    Explicit retirement suppresses completion; completed tombstones prevent replay; `Ended` owns
    physical cleanup after fade. CP-TA1 implements only the internal completed-materialization latch
    required for no replay; CP-TA2 adds outward dispatch, physical completion cleanup, and the

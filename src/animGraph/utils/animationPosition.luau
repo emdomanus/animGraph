@@ -33,10 +33,19 @@ function AnimationPosition.assertValid(position: AnimationPosition): AnimationPo
 	return position
 end
 
+function AnimationPosition.isComplete(position: number, length: number, speed: number): boolean
+	if position >= length then
+		return speed > 0
+	end
+
+	return position <= 0 and speed < 0
+end
+
 function AnimationPosition.resolve(
 	position: AnimationPosition,
 	length: number,
-	looped: boolean
+	looped: boolean,
+	speed: number
 ): (number, boolean)
 	AnimationPosition.assertValid(position)
 	assert(isFinite(length) and length > 0, "animation length must be finite and positive")
@@ -53,7 +62,7 @@ function AnimationPosition.resolve(
 	local resolved = if position.kind == "normalized"
 		then position.value * length
 		else math.min(position.value, length)
-	return resolved, resolved >= length
+	return resolved, AnimationPosition.isComplete(resolved, length, speed)
 end
 
 return AnimationPosition

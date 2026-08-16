@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Corrected non-looping terminal classification to use desired signed native
+  speed, including held/inward boundaries, natural reverse completion, safe
+  pending reverse starts, and seek-free live sign pivots on one generation.
+- Added the deterministic reverse boundary/start/pivot/loop/rematerialization
+  matrix and updated the backend/API/Studio contracts. Recorded authoritative
+  operator acceptance of the complete CP-AG-R Studio matrix.
 - Renamed the timing seam to `LogicalPositionReader` / `logicalPositionReader`
   and its input to `time`, distinguishing the shared sampled time from each
   reader's returned logical position without retaining compatibility aliases.

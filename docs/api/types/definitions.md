@@ -51,9 +51,11 @@ export type TrackCompletedEvent<LayerT, StateT> = {
 ```
 
 The event identifies one completed non-looping materialized generation without
-exposing a Roblox track or signal. Natural terminal playback and accepted
-initial/live terminal positioning emit it exactly once after backend state is
-committed. Explicit retirement does not emit it.
+exposing a Roblox track or signal. Natural forward upper-end playback, natural
+reverse lower-end playback, and accepted initial/live boundaries whose desired
+signed speed points outward emit it exactly once after backend state is
+committed. Inward or zero-speed boundary placement, looping addressing, and
+explicit retirement do not emit it.
 
 ## Release
 

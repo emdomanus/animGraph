@@ -64,10 +64,12 @@ export type AnimPlaybackImpl<LayerT, StateT, ClipT> = AnimPlayback<LayerT, State
 	_state: StateT?,
 	_weight: number,
 	_speed: number,
+	_nativeSpeed: number,
 	_looped: boolean,
 	_logicalPriority: number,
 	_priority: Enum.AnimationPriority?,
 	_pendingPosition: AnimationPosition?,
+	_pendingReverseStart: boolean,
 	_lifecycle: PlaybackLifecycle,
 }
 
@@ -101,9 +103,16 @@ local function latchCompleted<LayerT, StateT, ClipT>(
 
 	self._lifecycle = "completed"
 	self._pendingPosition = nil
+	self._pendingReverseStart = false
 	disconnect(self._stoppedConnection)
 	self._stoppedConnection = nil
 	return true
+end
+
+local function requiresPendingReverseHold<LayerT, StateT, ClipT>(
+	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
+): boolean
+	return self._pendingPosition ~= nil and not self._looped and self._speed < 0 and self._track.Length <= 0
 end
 
 local function resolvePendingPosition<LayerT, StateT, ClipT>(
@@ -119,12 +128,19 @@ local function resolvePendingPosition<LayerT, StateT, ClipT>(
 		return false
 	end
 
-	local resolvedSeconds, completed = AnimationPosition.resolve(pending, length, self._looped)
+	local resolvedSeconds, completed = AnimationPosition.resolve(pending, length, self._looped, self._speed)
 	self._pendingPosition = nil
+	self._track.TimePosition = resolvedSeconds
+	if self._pendingReverseStart then
+		self._pendingReverseStart = false
+		if self._nativeSpeed ~= self._speed then
+			self._nativeSpeed = self._speed
+			self._track:AdjustSpeed(self._speed)
+		end
+	end
 	if completed then
 		latchCompleted(self)
 	end
-	self._track.TimePosition = resolvedSeconds
 	return completed
 end
 
@@ -146,10 +162,12 @@ function AnimPlayback.new<LayerT, StateT, ClipT>(
 	self._state = nil
 	self._weight = 0
 	self._speed = 1
+	self._nativeSpeed = 1
 	self._looped = false
 	self._logicalPriority = 0
 	self._priority = nil
 	self._pendingPosition = nil
+	self._pendingReverseStart = false
 	self._lifecycle = "active"
 	self._stoppedConnection = track.Stopped:Connect(function()
 		config.onStopped(config.generation)
@@ -180,7 +198,13 @@ function AnimPlayback.start<LayerT, StateT, ClipT>(
 	local track = self._track
 	track.Looped = self._looped
 	track.Priority = robloxPriority
-	track:Play(request.fadeTime, self._weight, self._speed)
+	local playSpeed = self._speed
+	if requiresPendingReverseHold(self) then
+		playSpeed = 0
+		self._pendingReverseStart = true
+	end
+	self._nativeSpeed = playSpeed
+	track:Play(request.fadeTime, self._weight, playSpeed)
 	return resolvePendingPosition(self)
 end
 
@@ -198,6 +222,8 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 	self._logicalPriority = request.logicalPriority
 	local track = self._track
 	local weight = math.max(request.weight, 0)
+	local speedChanged = request.speed ~= self._speed
+	self._speed = request.speed
 
 	if request.looped ~= self._looped then
 		self._looped = request.looped
@@ -211,12 +237,33 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 		self._weight = weight
 		track:AdjustWeight(weight, request.fadeTime)
 	end
-	if request.speed ~= self._speed then
-		self._speed = request.speed
-		track:AdjustSpeed(request.speed)
+	if requiresPendingReverseHold(self) then
+		self._pendingReverseStart = true
+		if self._nativeSpeed ~= 0 then
+			self._nativeSpeed = 0
+			track:AdjustSpeed(0)
+		end
+	end
+	local completed = resolvePendingPosition(self)
+	if completed then
+		return true
 	end
 
-	return resolvePendingPosition(self)
+	if not self._pendingReverseStart and self._nativeSpeed ~= self._speed then
+		self._nativeSpeed = self._speed
+		track:AdjustSpeed(self._speed)
+		local length = track.Length
+		if
+			speedChanged
+			and not self._looped
+			and length > 0
+			and AnimationPosition.isComplete(track.TimePosition, length, self._speed)
+		then
+			return latchCompleted(self)
+		end
+	end
+
+	return false
 end
 
 function AnimPlayback.setPosition<LayerT, StateT, ClipT>(
@@ -225,6 +272,13 @@ function AnimPlayback.setPosition<LayerT, StateT, ClipT>(
 ): boolean
 	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
 	self._pendingPosition = copyPosition(position)
+	if requiresPendingReverseHold(self) then
+		self._pendingReverseStart = true
+		if self._nativeSpeed ~= 0 then
+			self._nativeSpeed = 0
+			self._track:AdjustSpeed(0)
+		end
+	end
 	return resolvePendingPosition(self)
 end
 
@@ -254,6 +308,7 @@ function AnimPlayback.retire<LayerT, StateT, ClipT>(
 	local wasPlaying = self._track.IsPlaying
 	self._lifecycle = "retiring"
 	self._pendingPosition = nil
+	self._pendingReverseStart = false
 	disconnect(self._stoppedConnection)
 	self._stoppedConnection = nil
 	if wasPlaying then
@@ -272,6 +327,7 @@ function AnimPlayback.cleanup<LayerT, StateT, ClipT>(
 
 	self._lifecycle = "cleaned"
 	self._pendingPosition = nil
+	self._pendingReverseStart = false
 	disconnect(self._stoppedConnection)
 	disconnect(self._endedConnection)
 	self._stoppedConnection = nil

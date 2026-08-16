@@ -195,6 +195,289 @@ local ok, result = pcall(function(): number
 		end
 	end)
 
+	test("signed non-looping boundaries classify by desired direction", function(): ()
+		for _, case in {
+			{ name = "upper inward", position = { kind = "normalized", value = 1 }, speed = -1, expected = 10, completed = false },
+			{ name = "upper outward", position = { kind = "normalized", value = 1 }, speed = 1, expected = 10, completed = true },
+			{ name = "upper held", position = { kind = "normalized", value = 1 }, speed = 0, expected = 10, completed = false },
+			{ name = "lower inward", position = { kind = "seconds", value = 0 }, speed = 1, expected = 0, completed = false },
+			{ name = "lower outward", position = { kind = "seconds", value = 0 }, speed = -1, expected = 0, completed = true },
+			{ name = "lower held", position = { kind = "seconds", value = 0 }, speed = 0, expected = 0, completed = false },
+		} do
+			local backend, animator = newBackend(10)
+			local events = 0
+			local committed = false
+			backend:bindToTrackCompleted(function()
+				events += 1
+				local snapshot = backend:getDebugSnapshot()
+				committed = #snapshot.tracks == 1 and snapshot.tracks[1].details.lifecycle == "completed"
+			end)
+			local request = newRequest({ initialPosition = case.position, speed = case.speed })
+			backend:apply({ request })
+
+			local track = animator.tracks[1]
+			local snapshot = backend:getDebugSnapshot()
+			assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == case.expected, case.name .. " wrote the wrong boundary")
+			assert(events == (if case.completed then 1 else 0), case.name .. " emitted the wrong completion count")
+			assert(not case.completed or committed, case.name .. " dispatched before committing completion")
+			assert(snapshot.tracks[1].details.lifecycle == (if case.completed then "completed" else "active"), case.name .. " had the wrong lifecycle")
+			assert(animator.loadCount == 1 and track.calls.play == 1, case.name .. " replayed or replaced its generation")
+
+			local liveBackend, liveAnimator = newBackend(10)
+			local liveEvents = 0
+			local liveCommitted = false
+			liveBackend:bindToTrackCompleted(function()
+				liveEvents += 1
+				liveCommitted = liveBackend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
+			end)
+			local liveRequest = newRequest({ speed = case.speed })
+			liveBackend:apply({ liveRequest })
+			local liveTrack = liveAnimator.tracks[1]
+			liveTrack:setEngineTimePosition(5)
+			assert(liveBackend:setTrackPosition(liveRequest.trackKey, case.position), case.name .. " live boundary was rejected")
+			local liveSnapshot = liveBackend:getDebugSnapshot()
+			assert(#liveTrack.calls.positionWrites == 1 and liveTrack.calls.positionWrites[1] == case.expected, case.name .. " live boundary was wrong")
+			assert(liveEvents == (if case.completed then 1 else 0), case.name .. " live boundary emitted the wrong completion count")
+			assert(not case.completed or liveCommitted, case.name .. " live boundary dispatched before commit")
+			assert(liveSnapshot.tracks[1].details.lifecycle == (if case.completed then "completed" else "active"), case.name .. " live boundary had the wrong lifecycle")
+			assert(liveAnimator.loadCount == 1 and liveTrack.calls.play == 1, case.name .. " live boundary replayed or replaced its generation")
+		end
+	end)
+
+	test("pending reverse start holds Play until one upper write then adopts retained speed", function(): ()
+		local backend, animator = newBackend(0)
+		local events = 0
+		backend:bindToTrackCompleted(function()
+			events += 1
+		end)
+		local request = newRequest({
+			speed = -0.75,
+			initialPosition = { kind = "normalized", value = 1 },
+		})
+		backend:apply({ request })
+		local track = animator.tracks[1]
+		local generation = backend:getDebugSnapshot().tracks[1].details.generation
+
+		assert(track.calls.playSpeeds[1] == 0, "pending reverse start did not Play at zero speed")
+		assert(#track.calls.positionWrites == 0 and track.calls.adjustSpeed == 0, "pending reverse start moved before length resolved")
+		assert(#track.calls.order == 1 and track.calls.order[1].operation == "Play", "pending reverse start emitted an early native operation")
+		backend:apply({ request })
+		assert(#track.calls.order == 1 and events == 0, "unchanged pending reverse start churned or completed")
+
+		track:setLength(8)
+		backend:apply({ request })
+		backend:apply({ request })
+		local snapshot = backend:getDebugSnapshot().tracks[1]
+		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 8, "pending reverse start did not write the upper position once")
+		assert(track.calls.adjustSpeed == 1 and track.calls.speeds[1] == -0.75, "pending reverse start did not adopt retained negative speed once")
+		assert(#track.calls.order == 3, "pending reverse start emitted extra native operations")
+		assert(track.calls.order[2].operation == "TimePosition" and track.calls.order[2].value == 8, "pending reverse start did not position before speed")
+		assert(track.calls.order[3].operation == "AdjustSpeed" and track.calls.order[3].value == -0.75, "pending reverse start applied the wrong retained speed order")
+		assert(animator.loadCount == 1 and track.calls.play == 1, "pending reverse start replayed or replaced the track")
+		assert(snapshot.details.generation == generation and snapshot.details.lifecycle == "active", "pending reverse start changed generation or completed")
+		assert(snapshot.speed == -0.75 and events == 0, "pending reverse start lost desired speed or signaled completion")
+
+		local pivotBackend, pivotAnimator = newBackend(0)
+		local pivotEvents = 0
+		pivotBackend:bindToTrackCompleted(function()
+			pivotEvents += 1
+		end)
+		local pivotRequest = newRequest({
+			speed = 0,
+			initialPosition = { kind = "normalized", value = 1 },
+		})
+		pivotBackend:apply({ pivotRequest })
+		local pivotTrack = pivotAnimator.tracks[1]
+		local pivotGeneration = pivotBackend:getDebugSnapshot().tracks[1].details.generation
+
+		assert(pivotTrack.calls.playSpeeds[1] == 0, "zero-speed pending start did not Play at zero speed")
+		pivotRequest.speed = -1
+		pivotBackend:apply({ pivotRequest })
+		pivotBackend:apply({ pivotRequest })
+		assert(#pivotTrack.calls.order == 1, "zero-to-negative pending start escaped its zero-speed hold")
+		assert(pivotTrack.calls.adjustSpeed == 0, "zero-to-negative pending start adjusted before length resolved")
+		assert(pivotEvents == 0, "zero-to-negative pending start completed before length resolved")
+
+		pivotTrack:setLength(6)
+		pivotBackend:apply({ pivotRequest })
+		pivotBackend:apply({ pivotRequest })
+		local pivotSnapshot = pivotBackend:getDebugSnapshot().tracks[1]
+		assert(#pivotTrack.calls.positionWrites == 1 and pivotTrack.calls.positionWrites[1] == 6, "zero-to-negative pending start did not write the upper position once")
+		assert(pivotTrack.calls.adjustSpeed == 1 and pivotTrack.calls.speeds[1] == -1, "zero-to-negative pending start did not adopt retained negative speed once")
+		assert(#pivotTrack.calls.order == 3, "zero-to-negative pending start emitted extra native operations")
+		assert(pivotTrack.calls.order[2].operation == "TimePosition" and pivotTrack.calls.order[2].value == 6, "zero-to-negative pending start did not position before speed")
+		assert(pivotTrack.calls.order[3].operation == "AdjustSpeed" and pivotTrack.calls.order[3].value == -1, "zero-to-negative pending start applied the wrong retained speed order")
+		assert(pivotAnimator.loadCount == 1 and pivotTrack.calls.play == 1, "zero-to-negative pending start replayed or replaced the track")
+		assert(pivotSnapshot.details.generation == pivotGeneration and pivotSnapshot.details.lifecycle == "active", "zero-to-negative pending start changed generation or completed")
+		assert(pivotSnapshot.speed == -1 and pivotEvents == 0, "zero-to-negative pending start lost desired speed or signaled completion")
+	end)
+
+	test("known-length reverse start activates signed speed before one upper write", function(): ()
+		local backend, animator = newBackend(10)
+		local request = newRequest({ speed = -1, initialPosition = { kind = "normalized", value = 1 } })
+		backend:apply({ request })
+		backend:apply({ request })
+
+		local track = animator.tracks[1]
+		local snapshot = backend:getDebugSnapshot().tracks[1]
+		assert(#track.calls.order == 2, "known-length reverse start emitted extra native operations")
+		assert(track.calls.order[1].operation == "Play" and track.calls.order[1].value == -1, "known-length reverse start did not Play at signed speed")
+		assert(track.calls.order[2].operation == "TimePosition" and track.calls.order[2].value == 10, "known-length reverse start did not position after Play")
+		assert(track.calls.adjustSpeed == 0 and #track.calls.positionWrites == 1, "known-length reverse start reapplied speed or position")
+		assert(snapshot.details.lifecycle == "active" and snapshot.speed == -1, "known-length reverse start did not remain active inward")
+	end)
+
+	test("interior sign pivots use only AdjustSpeed on one generation", function(): ()
+		local backend, animator = newBackend(10)
+		local events = 0
+		backend:bindToTrackCompleted(function()
+			events += 1
+		end)
+		local request = newRequest()
+		backend:apply({ request })
+		local track = animator.tracks[1]
+		track:setEngineTimePosition(4)
+		local generation = backend:getDebugSnapshot().tracks[1].details.generation
+
+		for _, speed in { -1, 0, 0.5 } do
+			request.speed = speed
+			backend:apply({ request })
+		end
+
+		local snapshot = backend:getDebugSnapshot().tracks[1]
+		assert(track.calls.adjustSpeed == 3, "interior sign pivots did not use exactly one speed adjustment each")
+		assert(track.calls.speeds[1] == -1 and track.calls.speeds[2] == 0 and track.calls.speeds[3] == 0.5, "interior sign pivots applied the wrong speeds")
+		assert(#track.calls.positionWrites == 0 and track.calls.play == 1, "interior sign pivots sought or replayed")
+		assert(animator.loadCount == 1 and snapshot.details.generation == generation, "interior sign pivots replaced the generation")
+		assert(snapshot.details.lifecycle == "active" and events == 0, "interior sign pivots completed playback")
+	end)
+
+	test("boundary sign pivots hold or move inward and complete only when outward", function(): ()
+		for _, case in {
+			{
+				name = "upper",
+				position = { kind = "normalized", value = 1 },
+				initialSpeed = -1,
+				inwardSpeed = -0.5,
+				outwardSpeed = 1,
+			},
+			{
+				name = "lower",
+				position = { kind = "seconds", value = 0 },
+				initialSpeed = 1,
+				inwardSpeed = 0.5,
+				outwardSpeed = -1,
+			},
+		} do
+			local backend, animator = newBackend(10)
+			local events = 0
+			local committed = false
+			backend:bindToTrackCompleted(function()
+				events += 1
+				committed = backend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
+			end)
+			local request = newRequest({ initialPosition = case.position, speed = case.initialSpeed })
+			backend:apply({ request })
+			local track = animator.tracks[1]
+			local generation = backend:getDebugSnapshot().tracks[1].details.generation
+
+			request.speed = 0
+			backend:apply({ request })
+			assert(events == 0 and backend:getDebugSnapshot().tracks[1].details.lifecycle == "active", case.name .. " zero pivot completed")
+			request.speed = case.inwardSpeed
+			backend:apply({ request })
+			assert(events == 0 and backend:getDebugSnapshot().tracks[1].details.lifecycle == "active", case.name .. " inward pivot completed")
+			request.speed = case.outwardSpeed
+			backend:apply({ request })
+			backend:apply({ request })
+			track:fireStopped()
+
+			local snapshot = backend:getDebugSnapshot().tracks[1]
+			assert(events == 1 and committed, case.name .. " outward pivot did not complete once after commit")
+			assert(track.calls.adjustSpeed == 3, case.name .. " pivots did not adjust speed exactly once each")
+			assert(#track.calls.positionWrites == 1 and track.calls.play == 1, case.name .. " pivots sought or replayed")
+			assert(animator.loadCount == 1 and snapshot.details.generation == generation, case.name .. " pivots changed generation")
+		end
+	end)
+
+	test("natural reverse lower end completes exactly once", function(): ()
+		local backend, animator = newBackend(10)
+		local events = 0
+		local committed = false
+		backend:bindToTrackCompleted(function()
+			events += 1
+			committed = backend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
+		end)
+		local request = newRequest({ speed = -1, initialPosition = { kind = "normalized", value = 1 } })
+		backend:apply({ request })
+		local track = animator.tracks[1]
+		track:setEngineTimePosition(0)
+		track:fireStopped()
+		track:fireStopped()
+		backend:apply({ request })
+
+		assert(events == 1 and committed, "natural reverse end did not complete exactly once after commit")
+		assert(animator.loadCount == 1 and track.calls.play == 1, "natural reverse end replayed")
+		track:fireEnded()
+		track:fireStopped()
+		assert(events == 1 and track.calls.destroy == 1, "natural reverse stale signals duplicated completion or cleanup")
+	end)
+
+	test("reverse loop positions wrap without terminal completion", function(): ()
+		local backend, animator = newBackend(10)
+		local events = 0
+		backend:bindToTrackCompleted(function()
+			events += 1
+		end)
+		local request = newRequest({
+			speed = -1,
+			looped = true,
+			initialPosition = { kind = "normalized", value = 1 },
+		})
+		backend:apply({ request })
+		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 22 }), "reverse loop seconds position was rejected")
+		assert(backend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 }), "reverse loop normalized position was rejected")
+
+		local track = animator.tracks[1]
+		local writes = track.calls.positionWrites
+		local snapshot = backend:getDebugSnapshot().tracks[1]
+		assert(writes[1] == 0 and writes[2] == 2 and writes[3] == 0, "reverse loop did not wrap and canonicalize")
+		assert(events == 0 and snapshot.details.lifecycle == "active", "reverse loop addressing completed playback")
+		assert(track.calls.playSpeeds[1] == -1 and track.calls.play == 1, "reverse loop did not retain native reverse playback")
+	end)
+
+	test("reverse rematerialization preserves position and speed while ignoring stale signals", function(): ()
+		local backend, animator = newBackend(10)
+		local events = 0
+		backend:bindToTrackCompleted(function()
+			events += 1
+		end)
+		local request = newRequest({ speed = -1, initialPosition = { kind = "seconds", value = 10 } })
+		backend:apply({ request })
+		local oldTrack = animator.tracks[1]
+		local oldGeneration = backend:getDebugSnapshot().tracks[1].details.generation
+		backend:apply({})
+		backend:apply({ request })
+		local newTrack = animator.tracks[2]
+		local replacement: any = nil
+		for _, playback in backend:getDebugSnapshot().tracks do
+			if playback.details.lifecycle == "active" then
+				replacement = playback
+				break
+			end
+		end
+		assert(replacement ~= nil, "reverse rematerialization did not create an active generation")
+
+		assert(oldTrack.calls.playSpeeds[1] == -1 and newTrack.calls.playSpeeds[1] == -1, "reverse rematerialization lost signed speed")
+		assert(oldTrack.calls.positionWrites[1] == 10 and newTrack.calls.positionWrites[1] == 10, "reverse rematerialization lost absolute position")
+		assert(replacement.details.generation > oldGeneration and replacement.details.lifecycle == "active", "reverse rematerialization reused or completed its generation")
+		oldTrack:fireStopped()
+		oldTrack:fireEnded()
+		assert(events == 0 and oldTrack.calls.destroy == 1, "stale reverse signals completed or leaked the old generation")
+		assert(newTrack.calls.destroy == 0 and newTrack.TimePosition == 10, "stale reverse signals mutated the new generation")
+		assert(backend:getDebugSnapshot().tracks[1].details.generation == replacement.details.generation, "stale reverse signals changed active ownership")
+	end)
+
 	test("unchanged apply and logical-delta-only changes are native-idempotent", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ weight = 0.75, speed = 1.75, fadeTime = 0.6 })

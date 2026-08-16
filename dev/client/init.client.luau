@@ -19,6 +19,7 @@ type State = "empty" | "locomotion" | "idle" | "walk" | "jump" | "wave" | "cheer
 type Param = "speed" | "waveTrigger" | "cheerTrigger" | "danceTrigger" | "clearAction"
 type Clip = "idle" | "walk" | "jump" | "wave" | "cheer" | "dance"
 type LayerBackend = AnimGraph.RobloxLayerBackend
+type AnimationPosition = AnimGraph.AnimationPosition
 
 type TestButton = {
 	text: string,
@@ -44,6 +45,9 @@ local ANIMATION_IDS: { [Clip]: number } = {
 	cheer = 129423030,
 	dance = 182435998,
 }
+
+local CP_AG_R_UPPER: AnimationPosition = { kind = "normalized", value = 1 }
+local CP_AG_R_LOWER: AnimationPosition = { kind = "seconds", value = 0 }
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -78,6 +82,12 @@ local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, Layer
 local releaseUpdate: (() -> ())? = nil
 local debugConnection: RBXScriptConnection? = nil
 local cameraConnection: RBXScriptConnection? = nil
+local nativeAnimator: Animator? = nil
+local nativeTracks: { AnimationTrack } = {}
+local nativeTrackIds: { [AnimationTrack]: number } = {}
+local nativeConnections: { RBXScriptConnection } = {}
+local nativePlayCount = 0
+local evidenceSequence = 0
 local cameraTarget: Model? = nil
 local activeActionClip: Clip = "wave"
 local baseWeight = 1
@@ -116,6 +126,75 @@ local function appendLog(message: string): ()
 		scroller.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + 8)
 		scroller.CanvasPosition = Vector2.new(0, math.max(layout.AbsoluteContentSize.Y - scroller.AbsoluteSize.Y, 0))
 	end
+end
+
+local function appendEvidence(message: string): ()
+	evidenceSequence += 1
+	appendLog(string.format("evidence %03d %s", evidenceSequence, message))
+end
+
+local function formatNativeTrack(track: AnimationTrack): string
+	local trackId = nativeTrackIds[track] or -1
+	local animation = track.Animation
+	return string.format(
+		"native=%d asset=%s length=%.4f position=%.4f speed=%.2f playing=%s looped=%s",
+		trackId,
+		animation.AnimationId,
+		track.Length,
+		track.TimePosition,
+		track.Speed,
+		tostring(track.IsPlaying),
+		tostring(track.Looped)
+	)
+end
+
+local function appendNativeTrackState(track: AnimationTrack, eventName: string): ()
+	appendEvidence(eventName .. " " .. formatNativeTrack(track))
+end
+
+local function dumpNativeTrackStates(label: string): ()
+	appendEvidence(label .. " nativePlayCount=" .. tostring(nativePlayCount) .. " tracks=" .. tostring(#nativeTracks))
+	for _, track in nativeTracks do
+		appendNativeTrackState(track, "native state")
+	end
+end
+
+local function connectNativeEvidence(animator: Animator): ()
+	nativeAnimator = animator
+	local animationPlayedConnection = animator.AnimationPlayed:Connect(function(track: AnimationTrack)
+		nativePlayCount += 1
+		nativeTracks[#nativeTracks + 1] = track
+		nativeTrackIds[track] = nativePlayCount
+		appendNativeTrackState(track, "AnimationPlayed")
+
+		local observedFirstPositionChange = false
+		nativeConnections[#nativeConnections + 1] = track:GetPropertyChangedSignal("TimePosition"):Connect(function()
+			if observedFirstPositionChange then
+				return
+			end
+			observedFirstPositionChange = true
+			appendNativeTrackState(track, "first TimePosition change")
+		end)
+		nativeConnections[#nativeConnections + 1] = track:GetPropertyChangedSignal("Length"):Connect(function()
+			appendNativeTrackState(track, "Length changed")
+		end)
+		nativeConnections[#nativeConnections + 1] = track:GetPropertyChangedSignal("Speed"):Connect(function()
+			appendNativeTrackState(track, "Speed changed")
+		end)
+		nativeConnections[#nativeConnections + 1] = track.Stopped:Connect(function()
+			appendNativeTrackState(track, "Stopped")
+		end)
+		nativeConnections[#nativeConnections + 1] = track.Ended:Connect(function()
+			appendNativeTrackState(track, "Ended")
+		end)
+		nativeConnections[#nativeConnections + 1] = track.DidLoop:Connect(function()
+			appendNativeTrackState(track, "DidLoop")
+		end)
+		nativeConnections[#nativeConnections + 1] = track.Destroying:Connect(function()
+			appendEvidence("Destroying native=" .. tostring(nativeTrackIds[track] or -1))
+		end)
+	end)
+	nativeConnections[#nativeConnections + 1] = animationPlayedConnection
 end
 
 local function clearLog(): ()
@@ -463,7 +542,12 @@ local function setLogicalHeld(layer: Layer, held: boolean): ()
 	updateSummary()
 end
 
-local function playLifecycleClip(clip: Clip, looped: boolean, forceRestart: boolean?): ()
+local function playLifecycleClip(
+	clip: Clip,
+	looped: boolean,
+	forceRestart: boolean?,
+	initialPosition: AnimationPosition?
+): ()
 	activeActionClip = clip
 	local node = AnimGraph.clipNode.new(clip, {
 		name = "Lifecycle " .. tostring(clip),
@@ -476,6 +560,7 @@ local function playLifecycleClip(clip: Clip, looped: boolean, forceRestart: bool
 		looped = looped,
 		fadeTime = 0.6,
 		forceRestart = forceRestart == true,
+		initialPosition = initialPosition,
 		logicalPositionReader = actionLogicalPositionReader,
 	})
 	appendLog(
@@ -485,17 +570,24 @@ local function playLifecycleClip(clip: Clip, looped: boolean, forceRestart: bool
 			.. tostring(looped)
 			.. " restart="
 			.. tostring(forceRestart == true)
+			.. " initialPosition="
+			.. (
+				if initialPosition == nil
+					then "none"
+					else initialPosition.kind .. ":" .. tostring(initialPosition.value)
+			)
 	)
 	updateSummary()
 end
 
 local function setLifecyclePosition(position: AnimGraph.AnimationPosition, label: string): ()
+	appendEvidence("request live " .. label .. " at signed speed " .. formatSpeed(actionPlaybackRate))
 	local accepted = getController():setTrackPosition(LIFECYCLE_TRACK_KEY, position)
-	appendLog("lifecycle position " .. label .. " accepted=" .. tostring(accepted))
+	appendEvidence("live " .. label .. " accepted=" .. tostring(accepted))
 end
 
 local function playThenPositionTerminal(): ()
-	playLifecycleClip("wave", false)
+	playLifecycleClip("wave", false, nil, nil)
 	task.delay(0.1, function()
 		if controller ~= nil then
 			setLifecyclePosition({ kind = "normalized", value = 1 }, "terminal")
@@ -504,16 +596,16 @@ local function playThenPositionTerminal(): ()
 end
 
 local function replaceLifecycleClip(): ()
-	playLifecycleClip("wave", false)
+	playLifecycleClip("wave", false, nil, nil)
 	task.delay(0.2, function()
 		if controller ~= nil then
-			playLifecycleClip("cheer", false)
+			playLifecycleClip("cheer", false, nil, nil)
 		end
 	end)
 end
 
 local function reappearDuringFade(): ()
-	playLifecycleClip("wave", false)
+	playLifecycleClip("wave", false, nil, nil)
 	task.delay(0.2, function()
 		local activeController = controller
 		if activeController == nil then
@@ -524,9 +616,14 @@ local function reappearDuringFade(): ()
 	end)
 	task.delay(0.35, function()
 		if controller ~= nil then
-			playLifecycleClip("cheer", false)
+			playLifecycleClip("cheer", false, nil, nil)
 		end
 	end)
+end
+
+local function playLifecycleAt(position: AnimationPosition, label: string): ()
+	appendEvidence("requested initial " .. label .. " at signed speed " .. formatSpeed(actionPlaybackRate))
+	playLifecycleClip("wave", false, true, position)
 end
 
 local function clearPhysicalLifecycle(): ()
@@ -564,9 +661,9 @@ local function setBasePlaybackRate(value: number): ()
 end
 
 local function setActionPlaybackRate(value: number): ()
-	actionPlaybackRate = math.max(value, 0)
+	actionPlaybackRate = value
 	getController():setLayerSpeed("action", actionPlaybackRate)
-	appendLog("action playback rate = " .. formatSpeed(actionPlaybackRate))
+	appendEvidence("action signed speed = " .. formatSpeed(actionPlaybackRate))
 	updateSummary()
 end
 
@@ -576,6 +673,18 @@ end
 
 local function adjustActionPlaybackRate(delta: number): ()
 	setActionPlaybackRate(actionPlaybackRate + delta)
+end
+
+local function runColdZeroToReverse(): ()
+	appendEvidence("cold 0-to-negative begin; use first in a fresh Play session")
+	setActionPlaybackRate(0)
+	playLifecycleClip("wave", false, true, CP_AG_R_UPPER)
+	local activeController = getController()
+	activeController:update()
+	dumpNativeTrackStates("cold 0-to-negative after Play(0)")
+	setActionPlaybackRate(-1)
+	activeController:update()
+	dumpNativeTrackStates("cold 0-to-negative after desired speed -1")
 end
 
 local function setActionPriority(value: number): ()
@@ -953,16 +1062,31 @@ local function dumpDebugSnapshot(): ()
 		appendLog(
 			"  track "
 				.. track.trackKey
+				.. " clip="
+				.. tostring(track.clip)
 				.. " generation="
 				.. tostring(getTrackDetail(track, "generation"))
 				.. " lifecycle="
 				.. tostring(getTrackDetail(track, "lifecycle"))
+				.. " physical="
+				.. tostring(getTrackDetail(track, "physicalPresent"))
+				.. " playing="
+				.. tostring(track.isPlaying)
+				.. " speed="
+				.. formatSpeed(track.speed)
 				.. " weight="
 				.. formatWeight(track.weight)
 				.. " priority="
 				.. tostring(getTrackRobloxPriority(track))
 		)
 	end
+end
+
+local function dumpNativeAndDebug(): ()
+	local animator = nativeAnimator
+	local playingCount = if animator == nil then 0 else #animator:GetPlayingAnimationTracks()
+	dumpNativeTrackStates("manual dump playing=" .. tostring(playingCount))
+	dumpDebugSnapshot()
 end
 
 local function formatDetailValue(value: any): string
@@ -1377,19 +1501,31 @@ local function buildUi(): ()
 			callback = restartAction,
 		},
 		{
-			text = "Action Rate -",
+			text = "Action Speed -0.1",
 			callback = function()
 				adjustActionPlaybackRate(-0.1)
 			end,
 		},
 		{
-			text = "Action Rate +",
+			text = "Action Speed +0.1",
 			callback = function()
 				adjustActionPlaybackRate(0.1)
 			end,
 		},
 		{
-			text = "Action Rate 1x",
+			text = "Action Speed -1x",
+			callback = function()
+				setActionPlaybackRate(-1)
+			end,
+		},
+		{
+			text = "Action Speed 0x",
+			callback = function()
+				setActionPlaybackRate(0)
+			end,
+		},
+		{
+			text = "Action Speed +1x",
 			callback = function()
 				setActionPlaybackRate(1)
 			end,
@@ -1553,14 +1689,42 @@ local function buildUi(): ()
 		{
 			text = "Play Natural End",
 			callback = function()
-				playLifecycleClip("wave", false)
+				playLifecycleClip("wave", false, nil, nil)
 			end,
 		},
 		{
 			text = "Play Loop",
 			callback = function()
-				playLifecycleClip("dance", true)
+				playLifecycleClip("dance", true, nil, nil)
 			end,
+		},
+		{
+			text = "Initial Upper",
+			callback = function()
+				playLifecycleAt(CP_AG_R_UPPER, "upper")
+			end,
+		},
+		{
+			text = "Initial Lower",
+			callback = function()
+				playLifecycleAt(CP_AG_R_LOWER, "lower")
+			end,
+		},
+		{
+			text = "Live Upper",
+			callback = function()
+				setLifecyclePosition(CP_AG_R_UPPER, "upper")
+			end,
+		},
+		{
+			text = "Live Lower",
+			callback = function()
+				setLifecyclePosition(CP_AG_R_LOWER, "lower")
+			end,
+		},
+		{
+			text = "Cold 0 -> -1",
+			callback = runColdZeroToReverse,
 		},
 		{
 			text = "Position 75%",
@@ -1589,7 +1753,7 @@ local function buildUi(): ()
 		{
 			text = "Force Restart",
 			callback = function()
-				playLifecycleClip(activeActionClip, false, true)
+				playLifecycleClip(activeActionClip, false, true, nil)
 			end,
 		},
 		{
@@ -1607,8 +1771,8 @@ local function buildUi(): ()
 
 	makeSection(controls, "Debug Tools", 7, {
 		{
-			text = "Dump Debug",
-			callback = dumpDebugSnapshot,
+			text = "Dump Native + Debug",
+			callback = dumpNativeAndDebug,
 		},
 		{
 			text = "Replay Graphs",
@@ -1707,6 +1871,7 @@ local function buildUi(): ()
 end
 
 local function setupController(animator: Animator): ()
+	connectNativeEvidence(animator)
 	local backend: AnimGraph.RobloxAnimatorBackend<Layer, State, Clip> = AnimGraph.robloxAnimatorBackend.new({
 		animator = animator,
 		resolveAssetId = function(clip: Clip): number
@@ -1772,7 +1937,18 @@ local function setupController(animator: Animator): ()
 	end)
 	activeController:on("trackCompleted", function(event)
 		if event.name == "trackCompleted" then
-			appendLog("event trackCompleted " .. event.trackKey)
+			local generation = "missing"
+			local lifecycle = "missing"
+			for _, track in activeController:getDebugSnapshot().backend.tracks do
+				if track.trackKey == event.trackKey then
+					generation = tostring(getTrackDetail(track, "generation"))
+					lifecycle = tostring(getTrackDetail(track, "lifecycle"))
+					break
+				end
+			end
+			appendEvidence(
+				"trackCompleted key=" .. event.trackKey .. " generation=" .. generation .. " lifecycle=" .. lifecycle
+			)
 		end
 	end)
 
@@ -1812,6 +1988,14 @@ local function cleanup(): ()
 		activeController:destroy()
 		controller = nil
 	end
+
+	for _, connection in nativeConnections do
+		connection:Disconnect()
+	end
+	nativeConnections = {}
+	nativeAnimator = nil
+	nativeTracks = {}
+	nativeTrackIds = {}
 
 	if devRoot.Parent ~= nil then
 		devRoot:Destroy()

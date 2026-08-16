@@ -93,6 +93,7 @@ function FakeRoblox.newTrack(length: number?): any
 	}
 	local calls = {
 		play = 0,
+		playSpeeds = {} :: { number },
 		adjustWeight = 0,
 		adjustSpeed = 0,
 		stop = 0,
@@ -103,6 +104,7 @@ function FakeRoblox.newTrack(length: number?): any
 		weights = {} :: { { weight: number, fadeTime: number } },
 		speeds = {} :: { number },
 		stopFades = {} :: { number },
+		order = {} :: { { operation: string, value: number } },
 	}
 
 	local track = setmetatable({}, {
@@ -132,8 +134,10 @@ function FakeRoblox.newTrack(length: number?): any
 					fields.Ended:Fire()
 				end
 			elseif key == "Play" then
-				return function(_, _fadeTime: number, _weight: number, _speed: number)
+				return function(_, _fadeTime: number, _weight: number, speed: number)
 					calls.play += 1
+					calls.playSpeeds[#calls.playSpeeds + 1] = speed
+					calls.order[#calls.order + 1] = { operation = "Play", value = speed }
 					fields.IsPlaying = true
 					fields.TimePosition = 0
 				end
@@ -146,6 +150,7 @@ function FakeRoblox.newTrack(length: number?): any
 				return function(_, speed: number)
 					calls.adjustSpeed += 1
 					calls.speeds[#calls.speeds + 1] = speed
+					calls.order[#calls.order + 1] = { operation = "AdjustSpeed", value = speed }
 				end
 			elseif key == "Stop" then
 				return function(_, fadeTime: number)
@@ -165,6 +170,7 @@ function FakeRoblox.newTrack(length: number?): any
 			fields[key] = value
 			if key == "TimePosition" then
 				calls.positionWrites[#calls.positionWrites + 1] = value
+				calls.order[#calls.order + 1] = { operation = "TimePosition", value = value }
 			elseif key == "Looped" then
 				calls.loopedWrites += 1
 			elseif key == "Priority" then

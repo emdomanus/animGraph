@@ -75,6 +75,13 @@ retiring, completed, or destroyed key. It does not change logical reader
 baselines, replay graph history, replace the generation, or emit graph state
 transitions.
 
+For the Roblox backend, non-looping boundary completion is direction-aware. The
+upper boundary completes only with positive desired speed, and the lower boundary
+completes only with negative desired speed. Zero or inward speed keeps the
+generation active. Looping addressing wraps and does not complete. A live sign
+pivot changes native speed without seeking, replaying, or replacing the
+generation.
+
 Subscribe with `controller:on("trackCompleted", callback)`. The event is:
 
 ```luau
@@ -88,4 +95,6 @@ Subscribe with `controller:on("trackCompleted", callback)`. The event is:
 
 The controller binds the backend completion port exactly once and forwards it
 through its snapshot-dispatched event bus. Destroying the controller releases
-that binding before backend teardown.
+that binding before backend teardown. Natural forward upper-end playback,
+natural reverse lower-end playback, and explicitly addressed outward boundaries
+can produce the event; explicit retirement cannot.

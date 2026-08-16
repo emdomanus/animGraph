@@ -178,10 +178,21 @@ The Roblox backend applies each evaluated clip request by setting:
 Repeated application of the same live request does not replay, reposition, or
 restart an unchanged fade. `setTrackPosition` addresses the same live generation
 forward or backward and permanently supersedes a pending initial position.
-Non-looping terminal initial/live positions are clamped and complete once;
-looping seconds wrap by length and normalized `1` canonicalizes to zero.
+Non-looping positions clamp to `[0, Length]`, but a boundary completes only when
+the desired signed speed points outward: positive at the upper boundary or
+negative at the lower boundary. Inward or zero-speed boundary placement remains
+active, and looping addressing wraps without completion.
 
-Natural and accepted terminal completion is forwarded as `trackCompleted` only
+A known-length reverse start calls `Play` with the desired negative speed before
+writing the exact upper position. If length is still zero, it calls `Play` at
+speed `0`, retains the negative request, writes the requested upper position
+once when length becomes positive, then applies the retained speed without
+replaying or replacing the generation. Later live sign pivots use only
+`AdjustSpeed`; an
+outward pivot at an exact non-looping boundary completes once.
+
+Natural forward upper-end completion, natural reverse lower-end completion, and
+accepted outward boundary completion are forwarded as `trackCompleted` only
 after state commit. Explicit stop, disappearance, replacement, restart, clear,
 and destroy suppress completion. Non-zero retirement fades keep old physical
 generations until `Ended`; completed tombstones retain no raw Roblox objects and
@@ -255,7 +266,7 @@ work.
 ## Development
 
 Run the deterministic, formatting, lint, Luau-analysis, and documentation
-checks from the repository root. The complete gate inventory and the 51-test
+checks from the repository root. The complete gate inventory and the 59-test
 baseline are in the [verification guide](docs/guides/verification.md):
 
 ```sh
@@ -289,5 +300,7 @@ snapshots. The control panel groups related controls into sections, keeps the
 console collapsed by default, and includes scripted gameplay-like sequences for
 testing chained locomotion/action operations. Its Temporal Lifecycle section
 adds independent held/advancing readers, live forward/back positioning, exact
-terminal and natural completion, looping, same-key replacement, reappearance
-during fade, and cleanup visibility.
+forward terminal and natural completion, looping, same-key replacement,
+reappearance during fade, and cleanup visibility. The direction-aware reverse
+controls and completed CP-AG-R operator acceptance are recorded in the Studio
+verification checklist.
