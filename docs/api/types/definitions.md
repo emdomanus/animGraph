@@ -18,6 +18,13 @@ inclusive interval `[0, 1]`. The union addresses native clip position for
 initial materialization or live backend positioning; it is not the graph's
 logical-position sample.
 
+`offsetTrackPosition` deliberately adds no new public position type. Its
+`deltaSeconds` argument is a finite signed number of native clip seconds and is
+an atomic relative mutation of one eligible active generation. Each delta and
+any accumulated unresolved offset must remain finite and representable. It is
+distinct from the absolute `AnimationPosition` union. AnimGraph exposes neither a public
+position getter nor pending/physical track state.
+
 ## TimeSource
 
 ```luau

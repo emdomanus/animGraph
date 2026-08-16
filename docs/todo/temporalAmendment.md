@@ -223,6 +223,11 @@ controller:setTrackPosition(
 	trackKey: string,
 	position: AnimationPosition
 ): boolean
+
+controller:offsetTrackPosition(
+	trackKey: string,
+	deltaSeconds: number
+): boolean
 ```
 
 On each `update`, the controller calls `timeSource` exactly once and validates the finite result. It
@@ -250,6 +255,11 @@ backend:apply(requests)
 backend:setTrackPosition(
 	trackKey: string,
 	position: AnimationPosition
+): boolean
+
+backend:offsetTrackPosition(
+	trackKey: string,
+	deltaSeconds: number
 ): boolean
 
 backend:bindToTrackCompleted(
@@ -321,6 +331,13 @@ video metadata, and this amendment does not invent it. This acceptance adds no
 public API and does not claim continuous reverse logical graph traversal,
 marker forwarding, VoxelMMO integration, publication, or dependency-pin work.
 
+CP-AG-P adds one backend-neutral relative operation without changing
+`AnimationPosition`: `offsetTrackPosition(trackKey, deltaSeconds)` accepts a
+finite signed number of native clip seconds and binds its read/modify/write to
+the eligible active generation. It adds no getter, raw-track surface, clock,
+hitstop policy, or consumer semantics. Deterministic/static implementation and
+the authoritative operator-reported Studio matrix are complete.
+
 - Both the controller operation and a directly used backend validate `AnimationPosition` before
   mutation. `kind` must be exactly `"seconds"` or `"normalized"`; `value` must be finite; seconds
   must be non-negative; normalized values must be in the inclusive range `[0, 1]`.
@@ -389,6 +406,33 @@ marker forwarding, VoxelMMO integration, publication, or dependency-pin work.
 - Forward and backward discontinuities use the same operation. Detecting or classifying a
   discontinuity remains caller-owned.
 
+### Atomic relative track positioning
+
+- `offsetTrackPosition` returns `true` when a finite signed-seconds command is
+  accepted by the current active generation, including while positive length is
+  pending. It returns `false` for a destroyed controller/backend or an unknown,
+  retiring, completed, cleaned, or stale target. Validation precedes mutation.
+- With known length, the playback reads its private physical `TimePosition` and
+  resolves/writes `current + deltaSeconds` in the same generation-bound call.
+  Looping values wrap; non-looping values clamp. No `Play`, replacement,
+  rematerialization, or native-property update is part of the operation.
+- Terminal classification uses final desired signed native speed, never offset
+  sign, source-time direction, or a temporary unresolved reverse hold. Zero
+  holds, inward remains active, and outward completion commits once before
+  dispatch.
+- With unresolved length, the generation accumulates offsets separately from
+  its optional pending absolute base. A later absolute set discards older
+  offsets; later offsets compose from the new base. Without an absolute base,
+  resolution observes physical position at that time. The combined result
+  wraps/clamps and writes exactly once.
+- An unresolved reverse generation remains at native speed zero until its
+  combined absolute/relative address writes once, then adopts retained desired
+  negative speed. Ordinary repeated apply does not reconsume an offset.
+- Completion, retirement, cleanup, replacement, clear, and destroy discard the
+  generation's pending offset state. Generation tokens, tombstones, deferred
+  completion dispatch, callback re-entry, and physical cleanup ownership remain
+  unchanged.
+
 ### Completion, tombstones, and callback re-entrancy
 
 - `trackCompleted` means that the current non-looping generation reached the upper boundary through
@@ -412,9 +456,9 @@ marker forwarding, VoxelMMO integration, publication, or dependency-pin work.
 - Completion events accumulated during `apply` dispatch only after the entire batch and retirement
   state are committed. An engine-signal completion commits its tombstone before dispatch.
 - Backend and controller event dispatch snapshot the current subscriber list. A completion callback
-  may synchronously call `play`, `stopLayer`, `setTrackPosition`, `clear`, `destroy`, or release/add
-  listeners. The emitter performs no post-callback mutation through a stale generation reference,
-  and re-entry cannot cause a second completion.
+  may synchronously call `play`, `stopLayer`, `setTrackPosition`, `offsetTrackPosition`, `clear`,
+  `destroy`, or release/add listeners. The emitter performs no post-callback mutation through a stale
+  generation reference, and re-entry cannot cause a second completion.
 
 ### Fade-retirement ownership and cleanup
 
@@ -684,6 +728,14 @@ publication/version decisions remain deferred.
 | Initial supersession | Live position arrives before pending initial resolves | Live position wins permanently. | Backend seam + Studio |
 | Live position | Forward then backward position on an active key | Same logical/materialized generation remains; speed/weight/loop/priority are preserved. | Backend seam + Studio |
 | Live non-loop boundary | Live position reaches exact lower or upper boundary | Only outward desired speed completes after state commit; inward or zero remains active. A completed tombstone refuses later positioning and unchanged apply. | Backend seam + Studio |
+| Relative validation/boolean | Finite and non-finite signed seconds against active/ineligible keys | Non-finite values reject before mutation; `true` means accepted by the current active generation even while length is unresolved; `false` means no eligible active generation. | Controller/backend Lune spec |
+| Known relative position | Positive and negative offsets on a known-length generation | One private physical read/modify/write per command; exact signed movement; generation, playing state, and all native properties remain unchanged. | Backend seam + Studio |
+| Relative loop | Positive/negative offsets in forward/reverse looped playback | Combined position wraps modulo length and never emits `trackCompleted`. | Backend seam + Studio |
+| Relative non-loop terminal | Offset clamps to either boundary with positive, zero, or negative desired speed | Final desired speed, not delta sign, classifies the terminal; zero/inward holds and outward completes once after state commit. | Backend seam + Studio |
+| Unresolved relative base | Offsets queue with a normalized pending base or no absolute base | Ordered sum resolves from the absolute base or physical position observed at resolution into exactly one write; repeated apply is idempotent. | Backend seam + Studio |
+| Unresolved command order | Offset/absolute/offset and absolute/multiple-offset sequences | Absolute set discards earlier offsets; later offsets compose from the new base and resolve once. | Backend seam + Studio |
+| Unresolved reverse relative | Negative-speed pending upper base receives offsets before length resolves | Native speed remains zero; combined address writes once before retained negative speed applies once; no replay or generation change. | Backend seam + Studio |
+| Relative lifecycle isolation | Pending offset generation is completed, replaced, retired, cleared, destroyed, or emits stale callbacks | Pending state cannot escape its generation; tombstones, callback re-entry/error cleanup, and replacement ownership remain exact-once. | Backend seam + Studio |
 | Live sign pivot | Desired speed crosses zero in the interior or at a boundary | Same generation receives only changed `AdjustSpeed`; no seek or replay; an exact boundary completes only when the new sign points outward. | Backend seam + Studio |
 | Missing position | Unknown, retiring, completed, or destroyed key | Method returns `false` and creates nothing. | Lune spec |
 | Natural completion | Non-looping track reaches the upper end forward or lower end in reverse while request remains | One `trackCompleted`; physical objects clean up; tombstone prevents automatic replay. | Backend seam + Studio |
@@ -781,6 +833,8 @@ stylua --check src dev tests
 selene src dev tests
 .\scripts\check-luau.ps1
 rojo sourcemap default.project.json --output sourcemap.json
+rojo sourcemap dev.project.json --output dev-sourcemap.json
+npm run docs:diagrams
 npm run docs:build
 git diff --check
 ```
@@ -794,7 +848,9 @@ sourcemap diffs and do not commit generated caches or documentation build output
 The stable Studio checklist and the operator-approved results are canonical in
 the [Studio Verification guide](../guides/studio-verification.md). This completed amendment
 retains the design intent and the distinction between engine evidence and deterministic/static
-proof; it does not duplicate the 12-case record here.
+proof; it does not duplicate the 12-case record here. CP-AG-P's completed
+relative-position operator matrix is recorded on that page and remains distinct
+from its deterministic suite and harness controls.
 
 ## Explicitly deferred
 
@@ -814,9 +870,10 @@ proof; it does not duplicate the 12-case record here.
 
 There are no open design blockers for CP-TA1, CP-TA2, or CP-TA3. The binding decisions are:
 
-1. `trackKey` is the public logical/backend identity. AnimGraph adds only
-   `setTrackPosition(trackKey, AnimationPosition)` and `trackCompleted`; it exposes no package
-   playback handle or raw `AnimationTrack`.
+1. `trackKey` is the public logical/backend identity. AnimGraph exposes absolute
+   `setTrackPosition(trackKey, AnimationPosition)`, atomic relative
+   `offsetTrackPosition(trackKey, deltaSeconds)`, and `trackCompleted`; it exposes
+   no position getter, package playback handle, or raw `AnimationTrack`.
 2. `update()` takes no arguments. It samples one `TimeSource` time and structural logical-position
    readers with play-over-layer-over-controller fallback, then derives each active layer's delta from
    a per-activation baseline. There is no AnimGraph clock, delta map, mutable timeline,

@@ -121,6 +121,19 @@ function AnimationController.setTrackPosition<LayerT, StateT, ParamT, ClipT, Lay
 	return self._backend:setTrackPosition(trackKey, position)
 end
 
+function AnimationController.offsetTrackPosition<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	trackKey: string,
+	deltaSeconds: number
+): boolean
+	AnimationPosition.assertFiniteSeconds(deltaSeconds, "deltaSeconds")
+	if self._destroyed then
+		return false
+	end
+
+	return self._backend:offsetTrackPosition(trackKey, deltaSeconds)
+end
+
 function AnimationController.stopLayer<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	layer: LayerT,

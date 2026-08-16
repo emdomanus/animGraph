@@ -100,6 +100,7 @@ function FakeRoblox.newTrack(length: number?): any
 		destroy = 0,
 		loopedWrites = 0,
 		priorityWrites = 0,
+		positionReads = 0,
 		positionWrites = {} :: { number },
 		weights = {} :: { { weight: number, fadeTime: number } },
 		speeds = {} :: { number },
@@ -111,6 +112,9 @@ function FakeRoblox.newTrack(length: number?): any
 		__index = function(_, key)
 			if key == "calls" then
 				return calls
+			elseif key == "TimePosition" then
+				calls.positionReads += 1
+				return fields.TimePosition
 			elseif key == "setLength" then
 				return function(_, value: number)
 					fields.Length = value

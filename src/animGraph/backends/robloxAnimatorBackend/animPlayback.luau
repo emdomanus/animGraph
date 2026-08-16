@@ -35,6 +35,7 @@ export type AnimPlayback<LayerT, StateT, ClipT> = {
 		robloxPriority: Enum.AnimationPriority
 	) -> boolean,
 	setPosition: (self: AnimPlayback<LayerT, StateT, ClipT>, position: AnimationPosition) -> boolean,
+	offsetPosition: (self: AnimPlayback<LayerT, StateT, ClipT>, deltaSeconds: number) -> boolean,
 	latchNaturalCompletion: (self: AnimPlayback<LayerT, StateT, ClipT>) -> boolean,
 	retire: (self: AnimPlayback<LayerT, StateT, ClipT>, fadeTime: number) -> boolean,
 	cleanup: (self: AnimPlayback<LayerT, StateT, ClipT>) -> (),
@@ -69,6 +70,7 @@ export type AnimPlaybackImpl<LayerT, StateT, ClipT> = AnimPlayback<LayerT, State
 	_logicalPriority: number,
 	_priority: Enum.AnimationPriority?,
 	_pendingPosition: AnimationPosition?,
+	_pendingOffsetSeconds: number?,
 	_pendingReverseStart: boolean,
 	_lifecycle: PlaybackLifecycle,
 }
@@ -103,6 +105,7 @@ local function latchCompleted<LayerT, StateT, ClipT>(
 
 	self._lifecycle = "completed"
 	self._pendingPosition = nil
+	self._pendingOffsetSeconds = nil
 	self._pendingReverseStart = false
 	disconnect(self._stoppedConnection)
 	self._stoppedConnection = nil
@@ -112,14 +115,18 @@ end
 local function requiresPendingReverseHold<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
 ): boolean
-	return self._pendingPosition ~= nil and not self._looped and self._speed < 0 and self._track.Length <= 0
+	return (self._pendingPosition ~= nil or self._pendingOffsetSeconds ~= nil)
+		and not self._looped
+		and self._speed < 0
+		and self._track.Length <= 0
 end
 
-local function resolvePendingPosition<LayerT, StateT, ClipT>(
+local function resolvePendingAddress<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
 ): boolean
-	local pending = self._pendingPosition
-	if pending == nil or self._lifecycle ~= "active" then
+	local pendingPosition = self._pendingPosition
+	local pendingOffsetSeconds = self._pendingOffsetSeconds
+	if (pendingPosition == nil and pendingOffsetSeconds == nil) or self._lifecycle ~= "active" then
 		return false
 	end
 
@@ -128,8 +135,25 @@ local function resolvePendingPosition<LayerT, StateT, ClipT>(
 		return false
 	end
 
-	local resolvedSeconds, completed = AnimationPosition.resolve(pending, length, self._looped, self._speed)
+	local resolvedSeconds: number
+	local completed: boolean
+	if pendingPosition ~= nil then
+		resolvedSeconds, completed = AnimationPosition.resolve(pendingPosition, length, self._looped, self._speed)
+	else
+		resolvedSeconds = self._track.TimePosition
+		completed = false
+	end
+	if pendingOffsetSeconds ~= nil then
+		resolvedSeconds, completed = AnimationPosition.resolveOffset(
+			resolvedSeconds,
+			pendingOffsetSeconds,
+			length,
+			self._looped,
+			self._speed
+		)
+	end
 	self._pendingPosition = nil
+	self._pendingOffsetSeconds = nil
 	self._track.TimePosition = resolvedSeconds
 	if self._pendingReverseStart then
 		self._pendingReverseStart = false
@@ -167,6 +191,7 @@ function AnimPlayback.new<LayerT, StateT, ClipT>(
 	self._logicalPriority = 0
 	self._priority = nil
 	self._pendingPosition = nil
+	self._pendingOffsetSeconds = nil
 	self._pendingReverseStart = false
 	self._lifecycle = "active"
 	self._stoppedConnection = track.Stopped:Connect(function()
@@ -205,7 +230,7 @@ function AnimPlayback.start<LayerT, StateT, ClipT>(
 	end
 	self._nativeSpeed = playSpeed
 	track:Play(request.fadeTime, self._weight, playSpeed)
-	return resolvePendingPosition(self)
+	return resolvePendingAddress(self)
 end
 
 function AnimPlayback.apply<LayerT, StateT, ClipT>(
@@ -244,7 +269,7 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 			track:AdjustSpeed(0)
 		end
 	end
-	local completed = resolvePendingPosition(self)
+	local completed = resolvePendingAddress(self)
 	if completed then
 		return true
 	end
@@ -271,6 +296,7 @@ function AnimPlayback.setPosition<LayerT, StateT, ClipT>(
 	position: AnimationPosition
 ): boolean
 	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
+	self._pendingOffsetSeconds = nil
 	self._pendingPosition = copyPosition(position)
 	if requiresPendingReverseHold(self) then
 		self._pendingReverseStart = true
@@ -279,7 +305,29 @@ function AnimPlayback.setPosition<LayerT, StateT, ClipT>(
 			self._track:AdjustSpeed(0)
 		end
 	end
-	return resolvePendingPosition(self)
+	return resolvePendingAddress(self)
+end
+
+function AnimPlayback.offsetPosition<LayerT, StateT, ClipT>(
+	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
+	deltaSeconds: number
+): boolean
+	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
+	AnimationPosition.assertFiniteSeconds(deltaSeconds, "deltaSeconds")
+	local pendingOffsetSeconds = self._pendingOffsetSeconds
+	local accumulatedOffsetSeconds = if pendingOffsetSeconds == nil
+		then deltaSeconds
+		else pendingOffsetSeconds + deltaSeconds
+	AnimationPosition.assertFiniteSeconds(accumulatedOffsetSeconds, "accumulated pending offset")
+	self._pendingOffsetSeconds = accumulatedOffsetSeconds
+	if requiresPendingReverseHold(self) then
+		self._pendingReverseStart = true
+		if self._nativeSpeed ~= 0 then
+			self._nativeSpeed = 0
+			self._track:AdjustSpeed(0)
+		end
+	end
+	return resolvePendingAddress(self)
 end
 
 function AnimPlayback.latchNaturalCompletion<LayerT, StateT, ClipT>(
@@ -308,6 +356,7 @@ function AnimPlayback.retire<LayerT, StateT, ClipT>(
 	local wasPlaying = self._track.IsPlaying
 	self._lifecycle = "retiring"
 	self._pendingPosition = nil
+	self._pendingOffsetSeconds = nil
 	self._pendingReverseStart = false
 	disconnect(self._stoppedConnection)
 	self._stoppedConnection = nil
@@ -327,6 +376,7 @@ function AnimPlayback.cleanup<LayerT, StateT, ClipT>(
 
 	self._lifecycle = "cleaned"
 	self._pendingPosition = nil
+	self._pendingOffsetSeconds = nil
 	self._pendingReverseStart = false
 	disconnect(self._stoppedConnection)
 	disconnect(self._endedConnection)

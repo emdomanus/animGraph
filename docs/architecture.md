@@ -59,7 +59,7 @@ fits the complete diagram without clipping.
 | `MotionNode` contract | Caller-authored constructors | Caller-owned graph configuration | Evaluation context and parameters | One or more backend-neutral requests; `ClipNode`, blends, and state machines conform structurally |
 | `StateMachineRuntime` | Caller through `stateMachine` | Caller-owned active graph, reached through its layer | Parameters, triggers, and logical `dt` | State/transition events and weighted child requests |
 | `ClipRequest` batch | `LayerRuntime` evaluation | Held by the current update only | Motion output plus layer composition | Validated request batch passed to `AnimationBackend` |
-| `AnimationBackend` contract | Caller supplies an implementation | Caller that owns the backend | Request batches and lifecycle commands | Materialization, positioning, capabilities, debug state, and completion binding |
+| `AnimationBackend` contract | Caller supplies an implementation | Caller that owns the backend | Request batches and lifecycle commands | Materialization, atomic absolute/relative positioning, capabilities, debug state, and completion binding |
 | `RobloxAnimatorBackend` | Caller through `robloxAnimatorBackend.new` | Caller that owns the backend | `ClipRequest` batches and an `Animator` | Roblox generations, priority mapping, native weight/speed changes, and completion events |
 | `AnimPlayback` generations | `RobloxAnimatorBackend` | `RobloxAnimatorBackend` | A request and resolved asset id | Private physical generation state and guarded engine callbacks |
 | Roblox `Animation` / `AnimationTrack` | `AnimPlayback` | `RobloxAnimatorBackend` through `AnimPlayback` | Asset id, play, fade, weight, speed, position, and priority commands | Physical playback and `Stopped`/`Ended` signals |
@@ -127,15 +127,28 @@ Initial and live native positions use the public `AnimationPosition` union.
 Initial placement is one-shot per materialized generation. `setTrackPosition`
 addresses the current generation by `trackKey`, supersedes a pending initial
 position, and does not replay graph history or replace the generation.
+`offsetTrackPosition` is a separate atomic relative command: it accepts finite
+signed seconds and binds the physical read/modify/write to that same active
+generation without exposing a getter or backend-specific handle.
+
+When length is unresolved, each `AnimPlayback` owns an optional absolute base
+and an independent accumulated offset. Absolute set discards older offsets;
+later offsets compose from the new base. Resolution uses that absolute base or,
+when absent, the physical position observed at resolution, then wraps/clamps the
+combined value into one write. Consumed offsets are never replayed by ordinary
+request application.
 
 At a non-looping boundary, completion is classified against desired signed native
 speed: positive is outward only at `Length`, negative is outward only at `0`, and
 zero holds either boundary active. Interior positions remain active. Looping
-positions wrap and never complete from addressing. A known-length reverse start
+absolute and relative positions wrap and never complete from addressing.
+Relative terminal classification uses desired signed speed rather than delta
+sign or a temporary native hold. A known-length reverse start
 activates negative speed through `Play` before the upper position write; an
 unknown-length reverse start holds `Play` at zero until one resolved position
-write, then adopts the retained negative speed without replay or generation
-change. Later sign pivots use only `AdjustSpeed`.
+write of its absolute base plus queued offsets, then adopts the retained
+negative speed without replay or generation change. Later sign pivots use only
+`AdjustSpeed`.
 
 ## Backend generation lifecycle
 
@@ -146,11 +159,14 @@ replacement or `forceRestart` retires the old generation and creates a new
 one; the generations may coexist while the old native fade runs.
 
 `AnimPlayback` creates an `Animation`, loads its `AnimationTrack`, applies
-initial native state, and tracks pending-length positioning. Changed native
+initial native state, and tracks generation-local pending absolute/relative
+positioning. Changed native
 weight, speed, loop, or priority updates only that property. Unchanged desired
 state does not replay, reposition, restart a fade, or create a generation. The
 only pending-reverse exception is the ordered position write and retained-speed
-application after positive length becomes available.
+application after positive length becomes available. Completion, retirement,
+cleanup, and replacement clear pending address state before that generation can
+affect another owner.
 
 Retirement invalidates natural-completion classification before `Stop(fade)`.
 `Ended` owns final physical cleanup for non-zero fades; zero-fade or already

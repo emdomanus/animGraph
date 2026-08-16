@@ -10,15 +10,19 @@ not prove behavior that depends on real `AnimationTrack` signals or timing.
 lune run tests/lune/run.luau
 ```
 
-The expected baseline is **59/59 tests** across the smoke, controller, and
+The expected baseline is **72/72 tests** across the smoke, controller, and
 Roblox-backend seam suites. The suite proves the typed event boundary, sampled
 reader selection and baselines, atomic preflight, request validation, motion
 evaluation, initial/live positioning semantics, idempotent apply, generation
 retirement, tombstones, completion dispatch, stale-signal suppression, re-entrant
 lifecycle behavior, the signed boundary table, known/pending reverse-start call
 order, seek-free sign pivots, natural reverse completion, reverse looping, and
-reverse rematerialization through fakes. It does not create a real Roblox
-`Animator`.
+reverse rematerialization through fakes. CP-AG-P additionally proves finite
+relative-offset validation, exact boolean semantics, atomic known-length
+read/modify/write, looping modulo, direction-aware terminals, unresolved
+absolute/relative ordering, one-write resolution, reverse position-before-speed,
+native-property preservation, stale-generation isolation, and completion
+re-entry/error cleanup. It does not create a real Roblox `Animator`.
 
 ## Formatting, lint, and Luau analysis
 
@@ -27,14 +31,16 @@ stylua --check src dev tests
 selene src dev tests
 .\scripts\check-luau.ps1
 rojo sourcemap default.project.json --output sourcemap.json
+rojo sourcemap dev.project.json --output dev-sourcemap.json
 ```
 
 StyLua checks authored formatting. Selene checks Luau lint rules. The Luau
 script regenerates the dev sourcemap, analyzes `src` and `dev` with Roblox
 definitions, and validates their require graph. The explicit default-project
-sourcemap command checks the package-root mapping as well. Both sourcemaps are
-generated local state; review them for unexpected changes and do not treat
-their generated contents as documentation.
+sourcemap command checks the package-root mapping as well; the explicit dev
+command makes both generated artifacts part of the recorded gate. Both
+sourcemaps are generated local state; review them for unexpected changes and do
+not treat their generated contents as documentation.
 
 ## Documentation and diff checks
 
@@ -71,14 +77,18 @@ the SVG palette follows the site's light and dark appearances.
 ## Engine-only evidence
 
 The [Studio Verification](./studio-verification.md) page is the canonical
-record for the Rojo-connected Studio checklist and the CP-TA3 and CP-AG-R
-operator results. Studio evidence is intentionally separate from the current
-59 deterministic tests and from static analysis. It covers native
+record for the Rojo-connected Studio checklist and the CP-TA3, CP-AG-R, and
+CP-AG-P operator results. Studio evidence is
+intentionally separate from the current 72 deterministic tests and from static
+analysis. It covers native
 `AnimationTrack` length, signal order, fade timing, physical cleanup, loop
 behavior, and re-entry that host fakes cannot establish.
 
 CP-TA3 is operator-reviewed and complete. The VoxelMMO timing-composition
 proofs, package publication, and version decision remain separate follow-on or
 release decisions. CP-AG-R reverse-terminal Studio acceptance is also complete
-by authoritative operator report; the 59 deterministic tests remain separate
-package proof rather than a substitute for that engine evidence.
+by authoritative operator report; its 59-test deterministic suite at acceptance
+time remains separate package proof rather than a substitute for that engine
+evidence. CP-AG-P Studio acceptance is complete by the same authoritative
+operator-report standard; its 72-test deterministic suite remains separate
+package proof.

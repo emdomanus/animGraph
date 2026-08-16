@@ -14,8 +14,9 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 
 The backend maps caller clip identities to positive Roblox asset ids and applies
 backend-neutral request batches to `AnimationTrack` objects. It implements
-`apply(requests)`, `setTrackPosition`, `bindToTrackCompleted`, `stopLayer`,
-`clear`, `destroy`, `getCapabilities`, and `getDebugSnapshot`.
+`apply(requests)`, `setTrackPosition`, `offsetTrackPosition`,
+`bindToTrackCompleted`, `stopLayer`, `clear`, `destroy`, `getCapabilities`, and
+`getDebugSnapshot`.
 
 ## Batch Contract
 
@@ -55,7 +56,7 @@ change generation during resolution.
 `forceRestart` creates a new internal materialization generation. An explicit
 `initialPosition` wins; without one, the new generation starts at zero.
 
-## Live Position
+## Absolute and Relative Position
 
 `setTrackPosition(trackKey, position)` validates before mutation and addresses
 only the active physical generation for the key. A valid command returns
@@ -73,14 +74,40 @@ A live speed change uses only `AdjustSpeed`. It does not seek, call `Play`, chan
 the key, or replace the generation. At an exact non-looping boundary an outward
 pivot completes once; an inward or zero pivot remains active.
 
+`offsetTrackPosition(trackKey, deltaSeconds)` accepts only finite signed
+seconds. Each supplied delta and the accumulated unresolved offset must remain
+finite and representable; cumulative overflow raises before pending state,
+native playback, or lifecycle mutation and preserves the previous valid sum.
+The method returns `true` when the current active generation accepts the command,
+including when `Length == 0` delays the physical write. It returns `false` for a
+missing, retiring, completed, cleaned, stale, or destroyed target.
+It exposes no position getter or raw `AnimationTrack`.
+
+With positive length, the method performs one generation-bound physical
+read/modify/write. Looping sums wrap modulo length and never complete;
+non-looping sums clamp to `[0, Length]`. Terminal classification uses the
+playback's final desired signed speed, not offset sign or a temporary native
+zero: zero holds either boundary, inward remains active, and outward completes
+once after committed position/lifecycle state.
+
+With unresolved length, accepted offsets accumulate separately from the pending
+absolute initial/live position. A pending absolute address becomes the base;
+without one, the backend observes physical `TimePosition` when length resolves.
+It adds the ordered offset sum, wraps/clamps once, and performs exactly one final
+write. `setTrackPosition` supersedes offsets issued before it, while later
+offsets compose from that absolute base. For an unresolved reverse start, native
+speed remains zero until the combined position write, then the retained desired
+negative speed is applied without replay or generation replacement.
+
 ## Idempotence
 
 For unchanged native desired state, repeated `apply` calls do not reload, replay,
 rewrite position, churn an internal generation, adjust weight/speed, rewrite
 loop/priority, or restart a fade. A delta-only request change remains visible to
 custom backends but has no native Roblox operation. Resolving one pending
-position after length becomes available is the only permitted position change
-during an otherwise unchanged apply. A held pending reverse start also applies
+absolute/relative address after length becomes available is the only permitted
+position change during an otherwise unchanged apply. The combined address and
+accumulated offsets are consumed once. A held pending reverse start also applies
 its retained speed once after that position write.
 
 ## Generations and Completion
@@ -102,8 +129,9 @@ at the upper end, natural reverse completion at the lower end, and accepted
 initial/live outward boundary placement. Completion is latched before dispatch
 and fires once. Explicit stop, request disappearance, replacement, restart
 retirement, clear, and destroy suppress completion. Dispatch snapshots listeners,
-so callbacks may synchronously mutate playback, positioning, lifecycle, or
-subscriptions.
+so callbacks may synchronously mutate playback, absolute/relative positioning,
+lifecycle, or subscriptions. Per-generation pending offsets are discarded on
+completion, retirement, cleanup, replacement, clear, and destroy.
 
 ## Fade Retirement and Cleanup
 

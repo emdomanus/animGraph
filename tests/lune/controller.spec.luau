@@ -25,6 +25,7 @@ local function newBackend(): any
 		bindCount = 0,
 		bindingReleaseCount = 0,
 		positionCalls = {} :: { any },
+		offsetCalls = {} :: { any },
 		completionListeners = {} :: { any },
 	}
 
@@ -44,6 +45,14 @@ local function newBackend(): any
 			position = position,
 		}
 		return self.positionResult ~= false
+	end
+
+	function backend:offsetTrackPosition(trackKey, deltaSeconds): boolean
+		self.offsetCalls[#self.offsetCalls + 1] = {
+			trackKey = trackKey,
+			deltaSeconds = deltaSeconds,
+		}
+		return self.offsetResult ~= false
 	end
 
 	function backend:bindToTrackCompleted(callback): () -> ()
@@ -683,16 +692,27 @@ local ok, result = pcall(function(): number
 		controller:play("base", makeMotion("base/idle", "idle", 1))
 		controller:update()
 		assert(controller:setTrackPosition("base/idle", { kind = "seconds", value = 3 }), "valid controller position was rejected")
+		assert(controller:offsetTrackPosition("base/idle", -1.25), "valid controller offset was rejected")
 		expectError(function()
 			controller:setTrackPosition("base/idle", { kind = "normalized", value = 2 })
 		end, "controller accepted an invalid live position")
+		for _, invalidOffset in { 0 / 0, math.huge, -math.huge } do
+			expectError(function()
+				controller:offsetTrackPosition("base/idle", invalidOffset)
+			end, "controller accepted a non-finite relative offset")
+		end
 		assert(#backend.positionCalls == 1, "invalid controller position reached the backend")
+		assert(#backend.offsetCalls == 1, "invalid controller offset reached the backend")
+		backend.offsetResult = false
+		assert(not controller:offsetTrackPosition("base/idle", 0), "controller changed the backend offset result")
 		logicalPosition = 6
 		controller:update()
 		assert(backend.batches[2][1].deltaTime == 2, "live positioning rewrote the logical reader baseline")
 		controller:destroy()
 		assert(not controller:setTrackPosition("base/idle", { kind = "seconds", value = 1 }), "destroyed controller accepted a live position")
+		assert(not controller:offsetTrackPosition("base/idle", 1), "destroyed controller accepted a relative position")
 		assert(#backend.positionCalls == 1, "destroyed controller delegated a live position")
+		assert(#backend.offsetCalls == 2, "destroyed controller delegated a relative position")
 	end)
 
 	test("completion callbacks may re-enter controller lifecycle operations", function(): ()

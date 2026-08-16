@@ -39,6 +39,11 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 		trackKey: string,
 		position: DefTypes.AnimationPosition
 	) -> boolean,
+	offsetTrackPosition: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		trackKey: string,
+		deltaSeconds: number
+	) -> boolean,
 	stopLayer: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,

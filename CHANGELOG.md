@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added backend-neutral `controller:offsetTrackPosition` and backend relative
+  positioning with finite signed seconds, active-generation boolean semantics,
+  known-length atomic read/modify/write, and generation-local unresolved offset
+  accumulation.
+- Added deterministic CP-AG-P coverage for absolute/relative command ordering,
+  loop/clamp behavior, desired-direction terminals, reverse-start ordering,
+  idempotence, property preservation, stale generations, and completion
+  re-entry/cleanup. Recorded authoritative operator acceptance of the complete
+  CP-AG-P Studio matrix.
 - Corrected non-looping terminal classification to use desired signed native
   speed, including held/inward boundaries, natural reverse completion, safe
   pending reverse starts, and seek-free live sign pivots on one generation.

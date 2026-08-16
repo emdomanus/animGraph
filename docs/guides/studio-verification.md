@@ -37,6 +37,55 @@ mode after the run.
 12. Seek across a named marker and then play continuously across it; record the
     absence/presence of marker events for deferred marker design.
 
+## CP-AG-P operator acceptance
+
+On 2026-08-16, the operator manually completed the documented CP-AG-P Studio
+verification and reported that every case passed. That report is authoritative
+for this checkpoint. The closure handoff did not include place/build,
+client/server role, rig, animation-asset, log, or video metadata, so this record
+does not invent those details. The deterministic 72-test suite remains separate
+package proof rather than a substitute for this engine evidence.
+
+The accepted relative-position matrix was:
+
+1. On a known-length active generation, use **Offset +0.50s** and **Offset
+   -0.50s**. Confirm exact signed movement from the current physical position,
+   unchanged generation/playing state, and no `Play`, load, speed, weight,
+   priority, loop, or fade churn.
+2. Use **Offset Loop Wrap** in forward and reverse playback. Confirm positive
+   and negative modulo wrapping, one write per accepted command, native
+   `DidLoop` as applicable, and no forwarded `trackCompleted`.
+3. Use **Offset Fwd End** and **Offset Rev End**. Confirm clamping to the upper
+   and lower boundary respectively and one completion only after the backend
+   lifecycle is committed. Repeat/stale signals must not duplicate completion.
+4. Use **Offset Zero Hold**, then exercise the corresponding inward-speed upper
+   and lower cases. Confirm boundary placement remains active; terminal outcome
+   follows final desired speed rather than offset sign.
+5. Run **Cold Offset Queue first in a fresh Play session**. Confirm `Length`
+   begins at zero, both offsets are accepted without a write/completion, the
+   pending normalized base plus ordered sum resolves to exactly one final write,
+   and repeated updates do not reapply it. Separately verify a queued offset
+   without an absolute base uses the physical position observed at resolution.
+6. While length remains unresolved, issue offset then absolute then offset.
+   Confirm the absolute command discards the older offset and the later offset
+   composes from the new base. Repeat absolute then multiple offsets and confirm
+   one combined write.
+7. Run **Cold Rev + Offset first in a fresh Play session**. Confirm `Play`/native
+   speed remains zero while unresolved, then observe exactly one combined
+   position write before exactly one retained negative-speed application, with
+   no replay or generation change.
+8. Queue/issue an offset around **Replace Same Key** and **Reappear In Fade**.
+   Confirm old pending state and stale `Stopped`/`Ended` callbacks cannot mutate
+   the replacement, and both generations clean according to their owners.
+9. Re-enter from relative outward completion through replacement, relative
+   positioning, stop/clear/destroy, and record one completion with no leak or
+   wedged dispatch. Use **Dump Native + Debug** before and after to establish the
+   absence of replay/property churn.
+
+This gate adds no continuous reverse graph traversal, marker forwarding,
+position getter, raw-track API, VoxelMMO/hitstop behavior, publication, or
+dependency-pin work.
+
 ## CP-AG-R operator acceptance
 
 On 2026-08-15, the operator manually completed the documented CP-AG-R Studio

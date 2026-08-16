@@ -586,6 +586,19 @@ local function setLifecyclePosition(position: AnimGraph.AnimationPosition, label
 	appendEvidence("live " .. label .. " accepted=" .. tostring(accepted))
 end
 
+local function offsetLifecyclePosition(deltaSeconds: number, label: string): ()
+	appendEvidence(
+		"request relative "
+			.. label
+			.. " deltaSeconds="
+			.. tostring(deltaSeconds)
+			.. " at signed speed "
+			.. formatSpeed(actionPlaybackRate)
+	)
+	local accepted = getController():offsetTrackPosition(LIFECYCLE_TRACK_KEY, deltaSeconds)
+	appendEvidence("relative " .. label .. " accepted=" .. tostring(accepted))
+end
+
 local function playThenPositionTerminal(): ()
 	playLifecycleClip("wave", false, nil, nil)
 	task.delay(0.1, function()
@@ -685,6 +698,51 @@ local function runColdZeroToReverse(): ()
 	setActionPlaybackRate(-1)
 	activeController:update()
 	dumpNativeTrackStates("cold 0-to-negative after desired speed -1")
+end
+
+local function runColdOffsetQueue(): ()
+	appendEvidence("cold relative queue begin; use first in a fresh Play session")
+	setActionPlaybackRate(0)
+	playLifecycleClip("cheer", false, true, { kind = "normalized", value = 0.25 })
+	local activeController = getController()
+	activeController:update()
+	offsetLifecyclePosition(0.5, "cold +0.5")
+	offsetLifecyclePosition(-0.25, "cold -0.25")
+	dumpNativeTrackStates("cold relative queue before Length resolution")
+end
+
+local function runColdReverseOffsetQueue(): ()
+	appendEvidence("cold reverse relative queue begin; use first in a fresh Play session")
+	setActionPlaybackRate(-1)
+	playLifecycleClip("dance", false, true, CP_AG_R_UPPER)
+	local activeController = getController()
+	activeController:update()
+	offsetLifecyclePosition(-0.5, "cold reverse -0.5")
+	offsetLifecyclePosition(0.1, "cold reverse +0.1")
+	dumpNativeTrackStates("cold reverse relative queue before Length resolution")
+end
+
+local function runOffsetTerminal(speed: number, initialPosition: AnimationPosition, deltaSeconds: number, label: string): ()
+	setActionPlaybackRate(speed)
+	playLifecycleClip("wave", false, true, initialPosition)
+	task.delay(0.15, function()
+		if controller ~= nil then
+			offsetLifecyclePosition(deltaSeconds, label)
+			dumpNativeTrackStates(label)
+		end
+	end)
+end
+
+local function runOffsetLoopWrap(): ()
+	setActionPlaybackRate(-1)
+	playLifecycleClip("dance", true, true, { kind = "normalized", value = 0.1 })
+	task.delay(0.15, function()
+		if controller ~= nil then
+			offsetLifecyclePosition(-60, "loop negative wrap")
+			offsetLifecyclePosition(60.5, "loop positive wrap")
+			dumpNativeTrackStates("relative loop wraps")
+		end
+	end)
 end
 
 local function setActionPriority(value: number): ()
@@ -1725,6 +1783,48 @@ local function buildUi(): ()
 		{
 			text = "Cold 0 -> -1",
 			callback = runColdZeroToReverse,
+		},
+		{
+			text = "Offset +0.50s",
+			callback = function()
+				offsetLifecyclePosition(0.5, "+0.5")
+			end,
+		},
+		{
+			text = "Offset -0.50s",
+			callback = function()
+				offsetLifecyclePosition(-0.5, "-0.5")
+			end,
+		},
+		{
+			text = "Offset Loop Wrap",
+			callback = runOffsetLoopWrap,
+		},
+		{
+			text = "Offset Fwd End",
+			callback = function()
+				runOffsetTerminal(1, { kind = "normalized", value = 0.9 }, 60, "forward relative terminal")
+			end,
+		},
+		{
+			text = "Offset Rev End",
+			callback = function()
+				runOffsetTerminal(-1, { kind = "normalized", value = 0.1 }, -60, "reverse relative terminal")
+			end,
+		},
+		{
+			text = "Offset Zero Hold",
+			callback = function()
+				runOffsetTerminal(0, { kind = "normalized", value = 0.9 }, 60, "zero-speed relative hold")
+			end,
+		},
+		{
+			text = "Cold Offset Queue",
+			callback = runColdOffsetQueue,
+		},
+		{
+			text = "Cold Rev + Offset",
+			callback = runColdReverseOffsetQueue,
 		},
 		{
 			text = "Position 75%",

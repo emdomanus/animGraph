@@ -51,7 +51,8 @@ AnimGraph owns:
 - sampled reader selection and per-activation baselines;
 - parameters, triggers, state machines, and graph events;
 - request assembly and duplicate-key validation;
-- backend-neutral logical delta, initial/live positioning, and completion contracts;
+- backend-neutral logical delta, initial/live absolute and relative positioning,
+  and completion contracts;
 - Roblox track materialization through the shipped backend.
 
 AnimGraph does not own character spawning, combat, VFX, network replication,
@@ -61,6 +62,7 @@ across a game-owned playback handle. Those concerns belong in consumer code.
 ## Documentation map
 
 - [Verification](/guides/verification) owns the deterministic and static gate inventory.
-- [Studio verification](/guides/studio-verification) owns the engine-only checklist and CP-TA3 record.
+- [Studio verification](/guides/studio-verification) owns engine-only checklists
+  and completed operator records, including CP-AG-P.
 - [Temporal amendment](/todo/temporalAmendment) preserves completed design and checkpoint history.
 - [VoxelMMO consumer research](/research/voxelmmo-migration) records integration requirements only.

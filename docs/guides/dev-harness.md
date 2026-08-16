@@ -28,6 +28,16 @@ invoke the hard clear boundary. Completion appears in the console. The debug
 panel reports generation, active/retiring/completed lifecycle, and whether
 physical ownership is still present so fade and cleanup ordering are observable.
 
+CP-AG-P adds **Offset +0.50s**, **Offset -0.50s**, **Offset Loop Wrap**,
+**Offset Fwd End**, **Offset Rev End**, and **Offset Zero Hold** controls. These
+exercise atomic relative movement, looping modulo, outward completion, and held
+boundaries without a public position getter. **Cold Offset Queue** materializes a
+fresh zero-length generation with a normalized absolute base and queues ordered
+positive/negative offsets. **Cold Rev + Offset** verifies the unresolved reverse
+order: native zero hold, one combined position write, then retained negative
+speed. Run each cold control first in a fresh Play session before its selected
+asset enters Studio's cache.
+
 For CP-AG-R Studio evidence and future regression checks, the Action State
 Machine section exposes signed native speed presets at `-1`, `0`, and `+1`, plus
 `0.1` adjustments. The Temporal Lifecycle section can force a fresh generation
@@ -45,6 +55,12 @@ changes, `Stopped`, `Ended`, `DidLoop`, `Destroying`, and `trackCompleted` after
 its committed lifecycle can be inspected. Use these controls with the
 [Studio checklist](./studio-verification.md); direct calls to
 `AnimationTrack:AdjustSpeed` bypass AnimGraph and are not package acceptance.
+
+For replacement isolation and absence of replay/property churn, combine the
+relative controls with **Replace Same Key**, **Reappear In Fade**, and **Dump
+Native + Debug**. The CP-AG-P checklist specifies the expected generation,
+native-call, completion, and cleanup evidence. These controls do not constitute
+Studio acceptance until an operator records the run.
 
 Use the [verification guide](./verification.md) for the deterministic and
 static commands. Studio-only observations belong in the

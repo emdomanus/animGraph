@@ -12,6 +12,12 @@ local function isFinite(value: number): boolean
 	return value == value and value > -math.huge and value < math.huge
 end
 
+function AnimationPosition.assertFiniteSeconds(value: number, name: string): number
+	assert(typeof(value) == "number", name .. " must be a number")
+	assert(isFinite(value), name .. " must be finite")
+	return value
+end
+
 function AnimationPosition.assertValid(position: AnimationPosition): AnimationPosition
 	assert(typeof(position) == "table", "AnimationPosition must be a table")
 	assert(
@@ -62,6 +68,43 @@ function AnimationPosition.resolve(
 	local resolved = if position.kind == "normalized"
 		then position.value * length
 		else math.min(position.value, length)
+	return resolved, AnimationPosition.isComplete(resolved, length, speed)
+end
+
+function AnimationPosition.resolveOffset(
+	basePosition: number,
+	deltaSeconds: number,
+	length: number,
+	looped: boolean,
+	speed: number
+): (number, boolean)
+	AnimationPosition.assertFiniteSeconds(basePosition, "basePosition")
+	AnimationPosition.assertFiniteSeconds(deltaSeconds, "deltaSeconds")
+	assert(isFinite(length) and length > 0, "animation length must be finite and positive")
+
+	if looped then
+		local wrappedBase = basePosition % length
+		local wrappedDelta = deltaSeconds % length
+		local distanceToEnd = length - wrappedBase
+		local resolved = if wrappedDelta >= distanceToEnd
+			then wrappedDelta - distanceToEnd
+			else wrappedBase + wrappedDelta
+		return resolved, false
+	end
+
+	local resolved: number
+	if deltaSeconds > 0 then
+		resolved = if basePosition >= length - deltaSeconds
+			then length
+			else math.max(basePosition + deltaSeconds, 0)
+	elseif deltaSeconds < 0 then
+		resolved = if basePosition <= -deltaSeconds
+			then 0
+			else math.min(basePosition + deltaSeconds, length)
+	else
+		resolved = math.clamp(basePosition, 0, length)
+	end
+
 	return resolved, AnimationPosition.isComplete(resolved, length, speed)
 end
 

@@ -17,7 +17,7 @@ The current implementation provides the authored controller slice:
 - validated one-shot initial positions in seconds or normalized form;
 - a Roblox `Animator` backend that drives `AnimationTrack` weight, speed, and
   priority without redundant unchanged operations;
-- live backend-neutral track positioning by `trackKey`;
+- atomic absolute and relative backend-neutral track positioning by `trackKey`;
 - generation-safe fade retirement, physical cleanup, and completed tombstones;
 - debug snapshots for controller, layers, parameters, and active, retiring, or completed backend tracks.
 
@@ -151,8 +151,9 @@ controller:update()
   normal parameters or consume trigger parameters.
 - A backend receives clip requests and applies them to an animation runtime.
   The shipped backend uses Roblox `Animator` and `AnimationTrack`.
-- `trackKey` is the backend-neutral identity used for live positioning and
-  completion; AnimGraph does not expose a playback handle or raw Roblox track.
+- `trackKey` is the backend-neutral identity used for absolute/relative live
+  positioning and completion; AnimGraph does not expose a playback handle,
+  position getter, or raw Roblox track.
 - Each update samples one finite `TimeSource` time and passes it to each distinct
   selected `LogicalPositionReader` at most once. Play readers replace layer
   readers, which replace the controller default.
@@ -178,10 +179,23 @@ The Roblox backend applies each evaluated clip request by setting:
 Repeated application of the same live request does not replay, reposition, or
 restart an unchanged fade. `setTrackPosition` addresses the same live generation
 forward or backward and permanently supersedes a pending initial position.
+`offsetTrackPosition` accepts finite signed seconds and atomically applies them
+to that generation's physical position. It returns `true` for an accepted active
+generation even when zero length delays the write, and `false` when no eligible
+active generation exists or the controller/backend is destroyed.
+
+Pending relative offsets remain separate from a pending absolute base. An
+absolute set discards older offsets; later offsets compose from the new base. If
+there is no absolute base, resolution observes physical position when length
+becomes positive. The combined address wraps/clamps and writes once; ordinary
+request application does not consume it twice. No position getter or Roblox
+track is exposed.
+
 Non-looping positions clamp to `[0, Length]`, but a boundary completes only when
 the desired signed speed points outward: positive at the upper boundary or
 negative at the lower boundary. Inward or zero-speed boundary placement remains
-active, and looping addressing wraps without completion.
+active, and looping addressing wraps without completion. Relative terminal
+classification uses desired speed rather than offset sign.
 
 A known-length reverse start calls `Play` with the desired negative speed before
 writing the exact upper position. If length is still zero, it calls `Play` at
@@ -232,6 +246,7 @@ Controller methods:
 - `controller:hasLayer(layer)`
 - `controller:play(layer, motionNode, options?)`
 - `controller:setTrackPosition(trackKey, position) -> boolean`
+- `controller:offsetTrackPosition(trackKey, deltaSeconds) -> boolean`
 - `controller:stopLayer(layer, fadeTime?)`
 - `controller:setLayerWeight(layer, weight)`
 - `controller:getLayerWeight(layer) -> number?`
@@ -266,7 +281,7 @@ work.
 ## Development
 
 Run the deterministic, formatting, lint, Luau-analysis, and documentation
-checks from the repository root. The complete gate inventory and the 59-test
+checks from the repository root. The complete gate inventory and the 72-test
 baseline are in the [verification guide](docs/guides/verification.md):
 
 ```sh
@@ -302,5 +317,5 @@ testing chained locomotion/action operations. Its Temporal Lifecycle section
 adds independent held/advancing readers, live forward/back positioning, exact
 forward terminal and natural completion, looping, same-key replacement,
 reappearance during fade, and cleanup visibility. The direction-aware reverse
-controls and completed CP-AG-R operator acceptance are recorded in the Studio
-verification checklist.
+controls, relative-offset controls, and completed CP-AG-R and CP-AG-P operator
+acceptance are recorded in the Studio verification checklist.

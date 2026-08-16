@@ -384,6 +384,28 @@ function RobloxAnimatorBackend.setTrackPosition<LayerT, StateT, ClipT>(
 	return true
 end
 
+function RobloxAnimatorBackend.offsetTrackPosition<LayerT, StateT, ClipT>(
+	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	trackKey: string,
+	deltaSeconds: number
+): boolean
+	AnimationPosition.assertFiniteSeconds(deltaSeconds, "deltaSeconds")
+	if self._destroyed then
+		return false
+	end
+
+	local playback = self._active[trackKey] :: Playback<LayerT, StateT, ClipT>?
+	if playback == nil or playback:getLifecycle() ~= "active" then
+		return false
+	end
+
+	local completed = playback:offsetPosition(deltaSeconds)
+	if completed then
+		self:_complete(playback)
+	end
+	return true
+end
+
 function RobloxAnimatorBackend.bindToTrackCompleted<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
 	callback: (event: TrackCompletedEvent<LayerT, StateT>) -> ()

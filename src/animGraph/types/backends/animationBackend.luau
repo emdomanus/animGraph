@@ -42,6 +42,11 @@ export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
 		trackKey: string,
 		position: DefTypes.AnimationPosition
 	) -> boolean,
+	offsetTrackPosition: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		trackKey: string,
+		deltaSeconds: number
+	) -> boolean,
 	bindToTrackCompleted: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		callback: (event: DefTypes.TrackCompletedEvent<LayerT, StateT>) -> ()
