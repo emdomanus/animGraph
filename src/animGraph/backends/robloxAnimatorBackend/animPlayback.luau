@@ -37,6 +37,10 @@ export type AnimPlayback<LayerT, StateT, ClipT> = {
 		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 		robloxPriority: Enum.AnimationPriority
 	) -> boolean,
+	preflightApply: (
+		self: AnimPlayback<LayerT, StateT, ClipT>,
+		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
+	) -> (),
 	setPosition: (self: AnimPlayback<LayerT, StateT, ClipT>, position: AnimationPosition) -> boolean,
 	offsetPosition: (self: AnimPlayback<LayerT, StateT, ClipT>, deltaSeconds: number) -> boolean,
 	latchNaturalCompletion: (self: AnimPlayback<LayerT, StateT, ClipT>) -> boolean,
@@ -69,6 +73,7 @@ export type AnimPlaybackImpl<LayerT, StateT, ClipT> = AnimPlayback<LayerT, State
 	_state: StateT?,
 	_weight: number,
 	_speed: number,
+	_timeRate: number,
 	_nativeSpeed: number,
 	_looped: boolean,
 	_logicalPriority: number,
@@ -116,12 +121,16 @@ local function latchCompleted<LayerT, StateT, ClipT>(
 	return true
 end
 
+local function desiredNativeSpeed<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): number
+	return self._speed * self._timeRate
+end
+
 local function requiresPendingReverseHold<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
 ): boolean
 	return (self._pendingPosition ~= nil or self._pendingOffsetSeconds ~= nil)
 		and not self._looped
-		and self._speed < 0
+		and desiredNativeSpeed(self) < 0
 		and self._track.Length <= 0
 end
 
@@ -141,8 +150,9 @@ local function resolvePendingAddress<LayerT, StateT, ClipT>(
 
 	local resolvedSeconds: number
 	local completed: boolean
+	local desiredSpeed = desiredNativeSpeed(self)
 	if pendingPosition ~= nil then
-		resolvedSeconds, completed = AnimationPosition.resolve(pendingPosition, length, self._looped, self._speed)
+		resolvedSeconds, completed = AnimationPosition.resolve(pendingPosition, length, self._looped, desiredSpeed)
 	else
 		resolvedSeconds = self._track.TimePosition
 		completed = false
@@ -153,7 +163,7 @@ local function resolvePendingAddress<LayerT, StateT, ClipT>(
 			pendingOffsetSeconds,
 			length,
 			self._looped,
-			self._speed
+			desiredSpeed
 		)
 	end
 	self._pendingPosition = nil
@@ -161,9 +171,9 @@ local function resolvePendingAddress<LayerT, StateT, ClipT>(
 	self._track.TimePosition = resolvedSeconds
 	if self._pendingReverseStart then
 		self._pendingReverseStart = false
-		if self._nativeSpeed ~= self._speed then
-			self._nativeSpeed = self._speed
-			self._track:AdjustSpeed(self._speed)
+		if self._nativeSpeed ~= desiredSpeed then
+			self._nativeSpeed = desiredSpeed
+			self._track:AdjustSpeed(desiredSpeed)
 		end
 	end
 	if completed then
@@ -190,6 +200,7 @@ function AnimPlayback.new<LayerT, StateT, ClipT>(
 	self._state = nil
 	self._weight = 0
 	self._speed = 1
+	self._timeRate = 1
 	self._nativeSpeed = 1
 	self._looped = false
 	self._logicalPriority = 0
@@ -220,6 +231,7 @@ function AnimPlayback.start<LayerT, StateT, ClipT>(
 	self._state = request.state
 	self._weight = math.max(request.weight, 0)
 	self._speed = request.speed
+	self._timeRate = request.timeRate
 	self._looped = request.looped
 	self._logicalPriority = request.logicalPriority
 	self._priority = robloxPriority
@@ -228,7 +240,7 @@ function AnimPlayback.start<LayerT, StateT, ClipT>(
 	local track = self._track
 	track.Looped = self._looped
 	track.Priority = robloxPriority
-	local playSpeed = self._speed
+	local playSpeed = desiredNativeSpeed(self)
 	if requiresPendingReverseHold(self) then
 		playSpeed = 0
 		self._pendingReverseStart = true
@@ -236,6 +248,12 @@ function AnimPlayback.start<LayerT, StateT, ClipT>(
 	self._nativeSpeed = playSpeed
 	track:Play(request.fadeTime, self._weight, playSpeed)
 	return resolvePendingAddress(self)
+end
+
+function AnimPlayback.preflightApply<LayerT, StateT, ClipT>(
+	_self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
+	_request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
+): ()
 end
 
 function AnimPlayback.apply<LayerT, StateT, ClipT>(
@@ -253,8 +271,11 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 	self._logicalPriority = request.logicalPriority
 	local track = self._track
 	local weight = math.max(request.weight, 0)
-	local speedChanged = request.speed ~= self._speed
+	local previousDesiredSpeed = desiredNativeSpeed(self)
 	self._speed = request.speed
+	self._timeRate = request.timeRate
+	local desiredSpeed = desiredNativeSpeed(self)
+	local speedChanged = desiredSpeed ~= previousDesiredSpeed
 
 	if request.looped ~= self._looped then
 		self._looped = request.looped
@@ -280,15 +301,15 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 		return true
 	end
 
-	if not self._pendingReverseStart and self._nativeSpeed ~= self._speed then
-		self._nativeSpeed = self._speed
-		track:AdjustSpeed(self._speed)
+	if not self._pendingReverseStart and self._nativeSpeed ~= desiredSpeed then
+		self._nativeSpeed = desiredSpeed
+		track:AdjustSpeed(desiredSpeed)
 		local length = track.Length
 		if
 			speedChanged
 			and not self._looped
 			and length > 0
-			and AnimationPosition.isComplete(track.TimePosition, length, self._speed)
+			and AnimationPosition.isComplete(track.TimePosition, length, desiredSpeed)
 		then
 			return latchCompleted(self)
 		end

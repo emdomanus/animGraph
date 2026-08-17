@@ -118,6 +118,7 @@ function RobloxAnimatorBackend.new<LayerT, StateT, ClipT>(
 	self._nextGeneration = 0
 	self._applyDepth = 0
 	self._dispatchingCompletions = false
+	self._lifecycleEpoch = 0
 	self._warnings = {}
 	self._destroyed = false
 
@@ -147,8 +148,13 @@ function RobloxAnimatorBackend._materialize<LayerT, StateT, ClipT>(
 	sampleTime: number,
 	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 	robloxPriority: Enum.AnimationPriority
-): Playback<LayerT, StateT, ClipT>
-	local assetId = assertPositiveAssetId(self._resolveAssetId(request.clip))
+): Playback<LayerT, StateT, ClipT>?
+	local lifecycleEpoch = self._lifecycleEpoch
+	local resolvedAssetId = self._resolveAssetId(request.clip)
+	if self._destroyed or self._lifecycleEpoch ~= lifecycleEpoch then
+		return nil
+	end
+	local assetId = assertPositiveAssetId(resolvedAssetId)
 	self._nextGeneration += 1
 	local generation = self._nextGeneration
 	local playbackConfig: AnimPlayback.AnimPlaybackConfig<ClipT> = {
@@ -332,69 +338,84 @@ function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 	if self._destroyed then
 		return
 	end
+	for _, request in requests do
+		local playback = self._active[request.trackKey] :: Playback<LayerT, StateT, ClipT>?
+		if playback ~= nil and playback:getClip() == request.clip and not request.forceRestart then
+			playback:preflightApply(request)
+		end
+	end
 	self._lastSampleTime = sampleTime
 
 	self._applyDepth += 1
-	local touched: { [string]: true } = {}
+	local applied, resultOrError = pcall(function(): unknown
+		local touched: { [string]: true } = {}
 
-	for _, request in requests do
-		local trackKey = request.trackKey
-		touched[trackKey] = true
-		local tombstone = self._completed[trackKey]
-		if tombstone ~= nil then
-			if tombstone.clip == request.clip and not request.forceRestart then
-				continue
+		for _, request in requests do
+			local trackKey = request.trackKey
+			touched[trackKey] = true
+			local tombstone = self._completed[trackKey]
+			if tombstone ~= nil then
+				if tombstone.clip == request.clip and not request.forceRestart then
+					continue
+				end
+
+				local completedPhysical = self._physical[tombstone.generation] :: Playback<LayerT, StateT, ClipT>?
+				self._completed[trackKey] = nil
+				if completedPhysical ~= nil then
+					self:_retire(completedPhysical, request.fadeTime)
+				end
 			end
 
+			local playback = self._active[trackKey] :: Playback<LayerT, StateT, ClipT>?
+			if playback ~= nil and (playback:getClip() ~= request.clip or request.forceRestart) then
+				self:_retire(playback, request.fadeTime)
+				playback = nil
+			end
+
+			local robloxPriority = self:_mapPriority(request)
+			if playback == nil then
+				local materialized = self:_materialize(sampleTime, request, robloxPriority)
+				if materialized == nil then
+					return nil
+				end
+			else
+				local completed = playback:apply(sampleTime, request, robloxPriority)
+				if completed then
+					self:_complete(playback)
+				end
+			end
+		end
+
+		local absentActive: { Playback<LayerT, StateT, ClipT> } = {}
+		for trackKey, playback in self._active do
+			if not touched[trackKey] then
+				absentActive[#absentActive + 1] = playback
+			end
+		end
+		for _, playback in absentActive do
+			self:_retire(playback, self._defaultFadeOut)
+		end
+
+		local absentTombstones: { Types.CompletedTombstone<LayerT, StateT, ClipT> } = {}
+		for trackKey, tombstone in self._completed do
+			if not touched[trackKey] then
+				absentTombstones[#absentTombstones + 1] = tombstone
+			end
+		end
+		for _, tombstone in absentTombstones do
+			self._completed[tombstone.trackKey] = nil
 			local completedPhysical = self._physical[tombstone.generation] :: Playback<LayerT, StateT, ClipT>?
-			self._completed[trackKey] = nil
 			if completedPhysical ~= nil then
-				self:_retire(completedPhysical, request.fadeTime)
+				self:_retire(completedPhysical, self._defaultFadeOut)
 			end
 		end
-
-		local playback = self._active[trackKey] :: Playback<LayerT, StateT, ClipT>?
-		if playback ~= nil and (playback:getClip() ~= request.clip or request.forceRestart) then
-			self:_retire(playback, request.fadeTime)
-			playback = nil
-		end
-
-		local robloxPriority = self:_mapPriority(request)
-		if playback == nil then
-			self:_materialize(sampleTime, request, robloxPriority)
-		else
-			local completed = playback:apply(sampleTime, request, robloxPriority)
-			if completed then
-				self:_complete(playback)
-			end
-		end
-	end
-
-	local absentActive: { Playback<LayerT, StateT, ClipT> } = {}
-	for trackKey, playback in self._active do
-		if not touched[trackKey] then
-			absentActive[#absentActive + 1] = playback
-		end
-	end
-	for _, playback in absentActive do
-		self:_retire(playback, self._defaultFadeOut)
-	end
-
-	local absentTombstones: { Types.CompletedTombstone<LayerT, StateT, ClipT> } = {}
-	for trackKey, tombstone in self._completed do
-		if not touched[trackKey] then
-			absentTombstones[#absentTombstones + 1] = tombstone
-		end
-	end
-	for _, tombstone in absentTombstones do
-		self._completed[tombstone.trackKey] = nil
-		local completedPhysical = self._physical[tombstone.generation] :: Playback<LayerT, StateT, ClipT>?
-		if completedPhysical ~= nil then
-			self:_retire(completedPhysical, self._defaultFadeOut)
-		end
-	end
+		return nil
+	end)
 
 	self._applyDepth -= 1
+	if not applied then
+		error(resultOrError, 0)
+	end
 	self:_flushCompletions()
 end
 
@@ -510,6 +531,7 @@ end
 function RobloxAnimatorBackend.clear<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
 ): ()
+	self._lifecycleEpoch += 1
 	self:_clearPhysical()
 end
 
@@ -521,6 +543,7 @@ function RobloxAnimatorBackend.destroy<LayerT, StateT, ClipT>(
 	end
 
 	self._destroyed = true
+	self._lifecycleEpoch += 1
 	self:_clearPhysical()
 	self._completionListeners = {}
 end

@@ -26,11 +26,6 @@ export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT
 type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	Types.GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 
-type PreparedLayerTime<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
-	layerRuntime: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	prepared: LayerRuntimeTypes.PreparedLogicalTime,
-}
-
 type PendingBackendStop<LayerT> = {
 	layer: LayerT,
 	fadeTime: number,
@@ -51,13 +46,13 @@ local function assertNonNegative(value: number, name: string): number
 	return value
 end
 
-local function assertReader(reader: DefTypes.LogicalTimeReader?, name: string): ()
+local function assertReader(reader: DefTypes.TimeReader?, name: string): ()
 	if reader ~= nil then
 		assert(typeof(reader) == "function", name .. " must be a function")
 	end
 end
 
-local function assertRequiredReader(reader: DefTypes.LogicalTimeReader, name: string): DefTypes.LogicalTimeReader
+local function assertRequiredReader(reader: DefTypes.TimeReader, name: string): DefTypes.TimeReader
 	assert(typeof(reader) == "function", name .. " must be a function")
 	return reader
 end
@@ -85,7 +80,7 @@ local function copyPlayOptions<StateT, LayerBackendT>(
 		state = options.state,
 		fadeTime = options.fadeTime,
 		fadeIn = options.fadeIn,
-		logicalTimeReader = options.logicalTimeReader,
+		timeReader = options.timeReader,
 		trackKey = options.trackKey,
 		weight = options.weight,
 		speed = options.speed,
@@ -106,7 +101,7 @@ local function assertPlayOptions<StateT, LayerBackendT>(
 	if options.initialPosition ~= nil then
 		AnimationPosition.assertValid(options.initialPosition)
 	end
-	assertReader(options.logicalTimeReader, "logicalTimeReader")
+	assertReader(options.timeReader, "timeReader")
 	if options.fadeTime ~= nil then
 		assertNonNegative(options.fadeTime, "fadeTime")
 	end
@@ -124,22 +119,33 @@ local function assertPlayOptions<StateT, LayerBackendT>(
 	end
 end
 
-local function readLogicalTimeSample(
-	reader: DefTypes.LogicalTimeReader,
-	sampleTime: number
-): DefTypes.LogicalTimeSample
+local function updateWasInvalidated<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	lifecycleEpoch: number
+): boolean
+	return self._destroyed or self._lifecycleEpoch ~= lifecycleEpoch
+end
+
+local function readTimeSample(
+	reader: DefTypes.TimeReader,
+	sampleTime: number,
+	updateInvalidated: () -> boolean
+): DefTypes.TimeSample?
 	local sample = reader(sampleTime)
-	assert(typeof(sample) == "table", "logicalTimeReader result must be a table")
+	if updateInvalidated() then
+		return nil
+	end
+	assert(typeof(sample) == "table", "timeReader result must be a table")
 	return {
-		position = assertFiniteNumber(sample.position, "logicalTimeReader position"),
-		addressRevision = assertFiniteNumber(sample.addressRevision, "logicalTimeReader addressRevision"),
+		position = assertFiniteNumber(sample.position, "timeReader position"),
+		rate = assertFiniteNumber(sample.rate, "timeReader rate"),
 	}
 end
 
 function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	config: AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 ): AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-	assertRequiredReader(config.logicalTimeReader, "logicalTimeReader")
+	assertRequiredReader(config.timeReader, "timeReader")
 
 	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = setmetatable(
 		{},
@@ -147,13 +153,14 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	) :: any
 
 	self._backend = config.backend
-	self._logicalTimeReader = config.logicalTimeReader
+	self._timeReader = config.timeReader
 	self._lastSampleTime = nil
 	self._pendingCommands = {}
 	self._layers = {}
 	self._layerOrder = {}
 	self._parameters = ParameterStore.new() :: any
 	self._eventBus = EventBus.new() :: any
+	self._lifecycleEpoch = 0
 	self._destroyed = false
 	self._releaseBackendCompletion = nil
 
@@ -360,49 +367,49 @@ function AnimationController.getLayerBackend<LayerT, StateT, ParamT, ClipT, Laye
 	return if layerRuntime ~= nil then layerRuntime:getLayerBackend() else nil
 end
 
-function AnimationController.setDefaultLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function AnimationController.setDefaultTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	reader: DefTypes.LogicalTimeReader
+	reader: DefTypes.TimeReader
 ): ()
 	if self._destroyed then
 		return
 	end
-	assertRequiredReader(reader, "logicalTimeReader")
+	assertRequiredReader(reader, "timeReader")
 	self._pendingCommands[#self._pendingCommands + 1] = {
-		kind = "setDefaultLogicalTimeReader",
+		kind = "setDefaultTimeReader",
 		reader = reader,
 	}
 end
 
-function AnimationController.setLayerLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function AnimationController.setLayerTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	layer: LayerT,
-	reader: DefTypes.LogicalTimeReader?
+	reader: DefTypes.TimeReader?
 ): ()
 	if self._destroyed then
 		return
 	end
 	requireLayer(self, layer)
-	assertReader(reader, "logicalTimeReader")
+	assertReader(reader, "timeReader")
 	self._pendingCommands[#self._pendingCommands + 1] = {
-		kind = "setLayerLogicalTimeReader",
+		kind = "setLayerTimeReader",
 		layer = layer,
 		reader = reader,
 	}
 end
 
-function AnimationController.setActivePlayLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function AnimationController.setActivePlayTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	layer: LayerT,
-	reader: DefTypes.LogicalTimeReader?
+	reader: DefTypes.TimeReader?
 ): ()
 	if self._destroyed then
 		return
 	end
 	requireLayer(self, layer)
-	assertReader(reader, "logicalTimeReader")
+	assertReader(reader, "timeReader")
 	self._pendingCommands[#self._pendingCommands + 1] = {
-		kind = "setActivePlayLogicalTimeReader",
+		kind = "setActivePlayTimeReader",
 		layer = layer,
 		reader = reader,
 	}
@@ -493,43 +500,39 @@ end
 local function finalDefaultReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	commands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> }
-): DefTypes.LogicalTimeReader
-	local reader = self._logicalTimeReader
+): DefTypes.TimeReader
+	local reader = self._timeReader
 	for _, command in commands do
-		if command.kind == "setDefaultLogicalTimeReader" then
+		if command.kind == "setDefaultTimeReader" then
 			reader = command.reader
 		end
 	end
 	return reader
 end
 
-local function prepareLayerTime<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+local function readLayerTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	layer: LayerT,
 	layerRuntime: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	initialDefaultReader: DefTypes.LogicalTimeReader,
-	defaultReader: DefTypes.LogicalTimeReader,
+	defaultReader: DefTypes.TimeReader,
 	commands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
 	sampleTime: number,
-	samplesByReader: { [DefTypes.LogicalTimeReader]: DefTypes.LogicalTimeSample }
-): PreparedLayerTime<LayerT, StateT, ParamT, ClipT, LayerBackendT>?
-	local initialReader = layerRuntime:_selectLogicalTimeReader(initialDefaultReader)
+	samplesByReader: { [DefTypes.TimeReader]: DefTypes.TimeSample },
+	updateInvalidated: () -> boolean
+): DefTypes.TimeSample?
 	local playing = layerRuntime._playing
-	local layerReader = layerRuntime._logicalTimeReader
-	local playReader = layerRuntime._playLogicalTimeReader
-	local resetPhase = false
+	local layerReader = layerRuntime._timeReader
+	local playReader = layerRuntime._playTimeReader
 
 	for _, command in commands do
 		if command.kind == "play" and command.layer == layer then
 			playing = true
-			playReader = if command.options ~= nil then command.options.logicalTimeReader else nil
-			resetPhase = true
+			playReader = if command.options ~= nil then command.options.timeReader else nil
 		elseif command.kind == "stop" and command.layer == layer then
 			playing = false
 			playReader = nil
-			resetPhase = true
-		elseif command.kind == "setLayerLogicalTimeReader" and command.layer == layer then
+		elseif command.kind == "setLayerTimeReader" and command.layer == layer then
 			layerReader = command.reader
-		elseif command.kind == "setActivePlayLogicalTimeReader" and command.layer == layer then
+		elseif command.kind == "setActivePlayTimeReader" and command.layer == layer then
 			playReader = command.reader
 		end
 	end
@@ -539,16 +542,20 @@ local function prepareLayerTime<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	end
 
 	local reader = playReader or layerReader or defaultReader
-	local sample = samplesByReader[reader]
-	if sample == nil then
-		sample = readLogicalTimeSample(reader, sampleTime)
-		samplesByReader[reader] = sample
+	local cachedSample: DefTypes.TimeSample? = samplesByReader[reader]
+	local sample: DefTypes.TimeSample
+	if cachedSample == nil then
+		local readSample = readTimeSample(reader, sampleTime, updateInvalidated)
+		if readSample == nil then
+			return nil
+		end
+		samplesByReader[reader] = readSample
+		sample = readSample
+	else
+		sample = cachedSample
 	end
 
-	return {
-		layerRuntime = layerRuntime,
-		prepared = layerRuntime:_prepareLogicalTimeSample(sample, reader ~= initialReader, resetPhase),
-	}
+	return sample
 end
 
 local function commitCommands<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
@@ -573,12 +580,12 @@ local function commitCommands<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 			requireLayer(self, command.layer):setLogicalPriority(command.logicalPriority)
 		elseif command.kind == "setLayerBackend" then
 			requireLayer(self, command.layer):setLayerBackend(command.layerBackend)
-		elseif command.kind == "setDefaultLogicalTimeReader" then
-			self._logicalTimeReader = command.reader
-		elseif command.kind == "setLayerLogicalTimeReader" then
-			requireLayer(self, command.layer):setLogicalTimeReader(command.reader)
-		elseif command.kind == "setActivePlayLogicalTimeReader" then
-			requireLayer(self, command.layer):setActivePlayLogicalTimeReader(command.reader)
+		elseif command.kind == "setDefaultTimeReader" then
+			self._timeReader = command.reader
+		elseif command.kind == "setLayerTimeReader" then
+			requireLayer(self, command.layer):setTimeReader(command.reader)
+		elseif command.kind == "setActivePlayTimeReader" then
+			requireLayer(self, command.layer):setActivePlayTimeReader(command.reader)
 		elseif command.kind == "setParameter" then
 			self._parameters:set(command.parameter, command.value)
 		elseif command.kind == "setTrigger" then
@@ -599,6 +606,7 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	assertFiniteNumber(sampleTime, "sampleTime")
 	local lastSampleTime = self._lastSampleTime
 	assert(lastSampleTime == nil or sampleTime >= lastSampleTime, "sampleTime moved backward")
+	local lifecycleEpoch = self._lifecycleEpoch
 
 	local pendingCommands = self._pendingCommands
 	local commandCount = #pendingCommands
@@ -607,25 +615,29 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 		commands[index] = pendingCommands[index]
 	end
 	local defaultReader = finalDefaultReader(self, commands)
-	local samplesByReader: { [DefTypes.LogicalTimeReader]: DefTypes.LogicalTimeSample } = {}
-	local preparedLayers: { PreparedLayerTime<LayerT, StateT, ParamT, ClipT, LayerBackendT> } = {}
-	local logicalPositionsByLayer: { [LayerT]: number } = {}
+	local samplesByReader: { [DefTypes.TimeReader]: DefTypes.TimeSample } = {}
+	local samplesByLayer: { [LayerT]: DefTypes.TimeSample } = {}
+	local updateInvalidated = function(): boolean
+		return updateWasInvalidated(self, lifecycleEpoch)
+	end
 
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]
 		if layerRuntime ~= nil then
-			local prepared = prepareLayerTime(
+			local sample = readLayerTimeSample(
 				layer,
 				layerRuntime,
-				self._logicalTimeReader,
 				defaultReader,
 				commands,
 				sampleTime,
-				samplesByReader
+				samplesByReader,
+				updateInvalidated
 			)
-			if prepared ~= nil then
-				preparedLayers[#preparedLayers + 1] = prepared
-				logicalPositionsByLayer[layer] = prepared.prepared.logicalPosition
+			if updateWasInvalidated(self, lifecycleEpoch) then
+				return
+			end
+			if sample ~= nil then
+				samplesByLayer[layer] = sample
 			end
 		end
 	end
@@ -636,13 +648,13 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	end
 	self._pendingCommands = nextCommands
 	local backendStops = commitCommands(self, commands)
-	for _, prepared in preparedLayers do
-		prepared.layerRuntime:_commitLogicalTimeSample(prepared.prepared)
-	end
 	self._lastSampleTime = sampleTime
 
 	for _, stop in backendStops do
 		self._backend:stopLayer(stop.layer, stop.fadeTime)
+		if updateWasInvalidated(self, lifecycleEpoch) then
+			return
+		end
 	end
 
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
@@ -658,9 +670,12 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]
-		local logicalPosition = logicalPositionsByLayer[layer]
-		if layerRuntime ~= nil and logicalPosition ~= nil then
-			local layerRequests = layerRuntime:evaluate(logicalPosition, getParameter, consumeTrigger, emitEvent)
+		local timeSample = samplesByLayer[layer]
+		if layerRuntime ~= nil and timeSample ~= nil then
+			local layerRequests = layerRuntime:evaluate(timeSample, getParameter, consumeTrigger, emitEvent)
+			if updateWasInvalidated(self, lifecycleEpoch) then
+				return
+			end
 			for _, request in layerRequests do
 				requests[#requests + 1] = request
 			end
@@ -668,12 +683,16 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	end
 
 	RequestValidation.validate(requests)
+	if updateWasInvalidated(self, lifecycleEpoch) then
+		return
+	end
 	self._backend:apply(sampleTime, requests)
 end
 
 function AnimationController.clear<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 ): ()
+	self._lifecycleEpoch += 1
 	self._pendingCommands = {}
 	for _, layerRuntime in self._layers do
 		layerRuntime:stop()

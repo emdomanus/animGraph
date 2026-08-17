@@ -13,8 +13,8 @@ local StackModifier = require(script.components.stackModifier)
 
 export type ParameterValue = Types.ParameterValue
 export type AnimationPosition = Types.AnimationPosition
-export type LogicalTimeSample = Types.LogicalTimeSample
-export type LogicalTimeReader = Types.LogicalTimeReader
+export type TimeSample = Types.TimeSample
+export type TimeReader = Types.TimeReader
 export type TrackCompletedEvent<LayerT, StateT> = Types.TrackCompletedEvent<LayerT, StateT>
 export type AnimationEventName = Types.AnimationEventName
 export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT>

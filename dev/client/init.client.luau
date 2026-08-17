@@ -101,12 +101,12 @@ local speedValue = 0
 local consoleExpanded = false
 local sequenceToken = 0
 local activeSequenceName = "none"
-local baseLogicalPosition = 0
-local actionLogicalPosition = 0
-local baseLogicalAnchorTime = os.clock()
-local actionLogicalAnchorTime = baseLogicalAnchorTime
-local baseLogicalHeld = false
-local actionLogicalHeld = false
+local baseTimePosition = 0
+local actionTimePosition = 0
+local baseTimeAnchor = os.clock()
+local actionTimeAnchor = baseTimeAnchor
+local baseTimeHeld = false
+local actionTimeHeld = false
 
 local function appendLog(message: string): ()
 	print("[AnimGraphDev] " .. message)
@@ -239,8 +239,8 @@ local function updateSummary(): ()
 		string.format(
 			"locomotion=%s  base=%s  action=%s  actionPriority=%d/%s  active=%s  sequence=%s",
 			formatSpeed(speedValue),
-			if baseLogicalHeld then "held" else "advancing",
-			if actionLogicalHeld then "held" else "advancing",
+			if baseTimeHeld then "held" else "advancing",
+			if actionTimeHeld then "held" else "advancing",
 			actionPriority,
 			priorityText,
 			activeActionClip,
@@ -249,27 +249,26 @@ local function updateSummary(): ()
 	)
 end
 
-local function sampleLogicalTime(time: number, layer: Layer): AnimGraph.LogicalTimeSample
+local function sampleTime(time: number, layer: Layer): AnimGraph.TimeSample
 	if layer == "base" then
 		return {
-			position = baseLogicalPosition + (if baseLogicalHeld then 0 else math.max(time - baseLogicalAnchorTime, 0)),
-			addressRevision = 0,
+			position = baseTimePosition + (if baseTimeHeld then 0 else math.max(time - baseTimeAnchor, 0)),
+			rate = if baseTimeHeld then 0 else 1,
 		}
 	end
 
 	return {
-		position = actionLogicalPosition
-			+ (if actionLogicalHeld then 0 else math.max(time - actionLogicalAnchorTime, 0)),
-		addressRevision = 0,
+		position = actionTimePosition + (if actionTimeHeld then 0 else math.max(time - actionTimeAnchor, 0)),
+		rate = if actionTimeHeld then 0 else 1,
 	}
 end
 
-local function baseLogicalTimeReader(time: number): AnimGraph.LogicalTimeSample
-	return sampleLogicalTime(time, "base")
+local function baseTimeReader(time: number): AnimGraph.TimeSample
+	return sampleTime(time, "base")
 end
 
-local function actionLogicalTimeReader(time: number): AnimGraph.LogicalTimeSample
-	return sampleLogicalTime(time, "action")
+local function actionTimeReader(time: number): AnimGraph.TimeSample
+	return sampleTime(time, "action")
 end
 
 local function getController(): AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
@@ -530,18 +529,18 @@ local function restartAction(): ()
 	end)
 end
 
-local function setLogicalHeld(layer: Layer, held: boolean): ()
-	local sampleTime = os.clock()
+local function setTimeHeld(layer: Layer, held: boolean): ()
+	local coordinate = os.clock()
 	if layer == "base" then
-		baseLogicalPosition = sampleLogicalTime(sampleTime, "base").position
-		baseLogicalAnchorTime = sampleTime
-		baseLogicalHeld = held
+		baseTimePosition = sampleTime(coordinate, "base").position
+		baseTimeAnchor = coordinate
+		baseTimeHeld = held
 	else
-		actionLogicalPosition = sampleLogicalTime(sampleTime, "action").position
-		actionLogicalAnchorTime = sampleTime
-		actionLogicalHeld = held
+		actionTimePosition = sampleTime(coordinate, "action").position
+		actionTimeAnchor = coordinate
+		actionTimeHeld = held
 	end
-	appendLog(tostring(layer) .. " logical reader = " .. (if held then "held" else "advancing"))
+	appendLog(tostring(layer) .. " time reader = " .. (if held then "held" else "advancing"))
 	updateSummary()
 end
 
@@ -564,7 +563,7 @@ local function playLifecycleClip(
 		fadeTime = 0.6,
 		forceRestart = forceRestart == true,
 		initialPosition = initialPosition,
-		logicalTimeReader = actionLogicalTimeReader,
+		timeReader = actionTimeReader,
 	})
 	appendLog(
 		"lifecycle play clip="
@@ -821,12 +820,12 @@ local function resetHarnessState(): ()
 	actionPriority = 100
 	actionRobloxPriority = nil
 	activeActionClip = "wave"
-	baseLogicalPosition = 0
-	actionLogicalPosition = 0
-	baseLogicalAnchorTime = os.clock()
-	actionLogicalAnchorTime = baseLogicalAnchorTime
-	baseLogicalHeld = false
-	actionLogicalHeld = false
+	baseTimePosition = 0
+	actionTimePosition = 0
+	baseTimeAnchor = os.clock()
+	actionTimeAnchor = baseTimeAnchor
+	baseTimeHeld = false
+	actionTimeHeld = false
 	replayControllerGraphs()
 	appendLog("reset harness state")
 end
@@ -1726,25 +1725,25 @@ local function buildUi(): ()
 		{
 			text = "Hold Base Reader",
 			callback = function()
-				setLogicalHeld("base", true)
+				setTimeHeld("base", true)
 			end,
 		},
 		{
 			text = "Advance Base Reader",
 			callback = function()
-				setLogicalHeld("base", false)
+				setTimeHeld("base", false)
 			end,
 		},
 		{
 			text = "Hold Action Reader",
 			callback = function()
-				setLogicalHeld("action", true)
+				setTimeHeld("action", true)
 			end,
 		},
 		{
 			text = "Advance Action Reader",
 			callback = function()
-				setLogicalHeld("action", false)
+				setTimeHeld("action", false)
 			end,
 		},
 		{
@@ -2005,13 +2004,13 @@ local function setupController(animator: Animator): ()
 			layerBackend = makeRobloxLayerBackend(actionRobloxPriority),
 			defaultFadeIn = 0.05,
 			defaultFadeOut = 0.12,
-			logicalTimeReader = actionLogicalTimeReader,
+			timeReader = actionTimeReader,
 		},
 	}
 
 	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 		backend = backend,
-		logicalTimeReader = baseLogicalTimeReader,
+		timeReader = baseTimeReader,
 		layers = layerDefinitions,
 	}
 
@@ -2111,7 +2110,7 @@ local ok, err = pcall(function()
 	local dummy, animator = createDummy()
 	setupCamera(dummy)
 	setupController(animator)
-	appendLog("Spawned R6 dummy and sampled logical readers from PreAnimation.")
+	appendLog("Spawned R6 dummy and sampled time readers from PreAnimation.")
 end)
 
 if not ok then

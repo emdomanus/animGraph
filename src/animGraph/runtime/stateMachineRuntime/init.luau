@@ -81,7 +81,8 @@ local function copyContextWithState<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	return {
 		layer = context.layer,
 		state = state,
-		logicalPosition = context.logicalPosition,
+		timePosition = context.timePosition,
+		timeRate = context.timeRate,
 		fadeTime = context.fadeTime,
 		layerWeight = context.layerWeight,
 		layerSpeed = context.layerSpeed,
@@ -194,7 +195,7 @@ function StateMachineRuntime._startTransition<LayerT, StateT, ParamT, ClipT, Lay
 
 	self._previousState = fromState
 	self._activeState = toState
-	self._transition = TransitionRuntime.new(transition, fromState, context.logicalPosition) :: any
+	self._transition = TransitionRuntime.new(transition, fromState, context.timePosition) :: any
 
 	local transitionName = transition.name or (tostring(fromState) .. " -> " .. tostring(toState))
 	context.emitEvent({
@@ -238,7 +239,7 @@ function StateMachineRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBacken
 
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
 	if transition ~= nil then
-		transition:update(context.logicalPosition)
+		transition:update(context.timePosition)
 
 		local alpha = transition:getAlpha()
 		local fromState = self._previousState

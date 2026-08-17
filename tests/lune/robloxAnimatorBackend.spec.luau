@@ -27,6 +27,8 @@ local function newRequest(overrides: any?): any
 		clip = "idle",
 		weight = 1,
 		speed = 1,
+		timePosition = 0,
+		timeRate = 1,
 		initialPosition = nil,
 		looped = false,
 		logicalPriority = 0,

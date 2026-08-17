@@ -1,6 +1,6 @@
 # Getting Started
 
-Construct a backend, provide a default logical-time reader, declare layers, and
+Construct a backend, provide a default time reader, declare layers, and
 pass an explicit coordinate from caller-owned scheduling.
 
 ```luau
@@ -23,16 +23,16 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 	end,
 })
 
-local worldReader: AnimGraph.LogicalTimeReader = function(sampleTime: number): AnimGraph.LogicalTimeSample
+local worldReader: AnimGraph.TimeReader = function(sampleTime: number): AnimGraph.TimeSample
 	return {
 		position = sampleTime,
-		addressRevision = 0,
+		rate = 1,
 	}
 end
 
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
-	logicalTimeReader = worldReader,
+	timeReader = worldReader,
 	layers = {
 		{ id = "base", logicalPriority = 0 },
 		{ id = "action", logicalPriority = 100 },
@@ -70,25 +70,30 @@ A layer or active play can override the controller reader:
 ```luau
 controller:play("action", AnimGraph.clip("slash"), {
 	state = "attack",
-	logicalTimeReader = actionReader,
+	timeReader = actionReader,
 })
 ```
 
 The active-play reader replaces the layer reader; the layer reader replaces the
 controller default. Runtime changes are also available through
-`setDefaultLogicalTimeReader`, `setLayerLogicalTimeReader`, and
-`setActivePlayLogicalTimeReader`. Reader changes take effect on the next update
-and hold/rebase existing logical phase.
+`setDefaultTimeReader`, `setLayerTimeReader`, and `setActivePlayTimeReader`.
+Reader changes take effect on the next valid update, and the replacement's
+position is observed literally.
 
-Return a new `addressRevision` only for discontinuous re-addressing. Continuous
-rate changes keep the revision stable.
+Return position and rate together so both fields describe one clock sample.
+AnimGraph does not infer rate from position changes or hide jumps. If a reader
+replacement must remain continuous, map it before returning the sample. If a
+native track must move physically, issue `setTrackPosition` or
+`offsetTrackPosition` after its generation exists.
 
 ## Backend mode
 
 Choose `nativeRate` when Roblox should advance tracks through native signed
 speed. Choose `sampledPosition` when the backend should derive and write
-physical position from each `sampleTime`. This is one fixed backend strategy,
-not a layer or content option; graph semantics are identical in both modes.
+physical position from each reader position. This is one fixed backend
+strategy, not a layer or content option; graph semantics are identical in both
+modes. Calling `update` every frame does not make `nativeRate` write
+`TimePosition` every frame.
 
 ## Initial and live position
 
@@ -101,4 +106,4 @@ controller:play("action", AnimGraph.clip("slash"), {
 ```
 
 Use synchronous `setTrackPosition` or `offsetTrackPosition` after a generation
-exists. Those physical commands do not change logical graph phase.
+exists. Those physical commands do not change state-machine progress.

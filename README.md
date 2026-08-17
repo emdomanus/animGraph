@@ -8,8 +8,8 @@ Docs: https://emdomanus.github.io/animGraph/
 The package provides:
 
 - `AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>`;
-- controller, layer, and active-play `LogicalTimeReader` scopes;
-- monotonic logical graph phase through source/revision rebasing;
+- controller, layer, and active-play `TimeReader` scopes;
+- literal time-basis position and rate sampling;
 - queued next-update graph intent and same-coordinate re-evaluation;
 - clip, Blend1D, Blend2D, and authored state-machine motion nodes;
 - backend-neutral requests, absolute/relative physical positioning, completion,
@@ -17,7 +17,7 @@ The package provides:
 - a Roblox backend with fixed `nativeRate` and `sampledPosition` strategies;
 - generation-safe fade retirement, cleanup, and completion tombstones.
 
-The caller owns scheduling and passes a finite monotonic coordinate to every
+The caller owns scheduling and passes a finite nondecreasing coordinate to every
 update. animGraph owns no clock or RunService connection.
 
 ## Install
@@ -50,16 +50,16 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 	end,
 })
 
-local worldReader: AnimGraph.LogicalTimeReader = function(sampleTime: number): AnimGraph.LogicalTimeSample
+local worldReader: AnimGraph.TimeReader = function(sampleTime: number): AnimGraph.TimeSample
 	return {
 		position = sampleTime,
-		addressRevision = 0,
+		rate = 1,
 	}
 end
 
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
-	logicalTimeReader = worldReader,
+	timeReader = worldReader,
 	layers = {
 		{ id = "base", logicalPriority = 0 },
 		{ id = "action", logicalPriority = 100 },
@@ -110,36 +110,37 @@ controller:destroy()
 ## Time model
 
 ```luau
-export type LogicalTimeSample = {
+export type TimeSample = {
 	position: number,
-	addressRevision: number,
+	rate: number,
 }
 
-export type LogicalTimeReader = (sampleTime: number) -> LogicalTimeSample
+export type TimeReader = (sampleTime: number) -> TimeSample
 ```
 
 Reader precedence is controller default, then layer override, then active-play
 override. Each distinct selected reader is sampled once per update.
 
-A new play begins logical graph phase at zero. Forward source movement with an
-unchanged revision advances phase by the exact difference. Stationary/backward
-movement, a reader change, or a revision change holds phase and rebases the
-source baseline. `addressRevision` is for discontinuous re-addressing, not
-ordinary continuous rate changes.
+`position` is used literally for graph, transition, custom-motion, and sampled
+physical evaluation. `rate` is supplied atomically with it and composes native
+physical speed. AnimGraph does not derive rate, classify discontinuities, or
+make reader changes continuous. A caller that needs continuity must provide an
+already-mapped reader.
 
 `controller:update(sampleTime)` accepts finite nondecreasing coordinates. Equal
 coordinates are legal; they allow newly queued commands to re-evaluate without
-advancing transitions. Backward coordinates and invalid reader samples reject
-the complete update before package mutation.
+advancing transitions. Backward controller coordinates and invalid reader
+samples reject the complete update before package mutation.
 
-State-machine transitions store a logical start-position anchor and derive
-progress from the current absolute phase. Motion requests contain no graph
-`dt`.
+State-machine transitions store a time-position anchor and derive progress from
+the current sample. Backward time positions hold an active transition's
+progress rather than traversing state backward. Motion requests contain no
+graph `dt`.
 
 ## Graph intent and physical commands
 
 Play, stop, parameters/triggers, layer weight/speed/priority/backend data, and
-logical-reader changes are queued for the next valid update. Getters expose
+time-reader changes are queued for the next valid update. Getters expose
 committed state.
 
 These remain synchronous:
@@ -149,7 +150,7 @@ These remain synchronous:
 - `clear()` and `destroy()` lifecycle boundaries.
 
 The positioning boolean means the current active physical generation accepted
-the command. Physical positioning never rewinds logical state-machine phase.
+the command. Physical positioning never rewinds state-machine progression.
 
 ## Backend position modes
 
@@ -161,16 +162,21 @@ The mode is selected once when constructing a backend and is exposed through
 its capabilities. It is not a layer, motion, or authored-content option.
 
 - `nativeRate` lets Roblox advance physical playback through `Play` and
-  `AdjustSpeed`. Unchanged requests do not seek or churn native properties.
+  `AdjustSpeed` at `request.speed * request.timeRate`. Unchanged effective
+  speed does not seek or churn native properties.
 - `sampledPosition` runs tracks at native speed zero and evaluates physical
-  phase from `positionAnchor + speed * (sampleTime - sampleTimeAnchor)` on each
-  apply. Speed/loop changes rebase before adopting the new values.
+  phase from `physicalAnchor + request.speed * (request.timePosition -
+  timeAnchor)` on each apply. Speed/loop changes rebase before adopting the new
+  values.
 
 Both modes receive `backend:apply(sampleTime, requests)` and share generation,
 fade, priority, positioning, completion, tombstone, and teardown behavior.
 
-Logical graph phase and physical clip phase are separate. Signed physical speed
-does not scale or reverse state-machine progress.
+Graph time position and physical clip phase are separate. Signed physical speed
+does not scale or reverse state-machine progress. A time-position jump is
+literal in sampled mode; in native mode the caller must issue
+`setTrackPosition` or `offsetTrackPosition` when the physical generation must
+be re-addressed.
 
 ## Physical position and completion
 
@@ -189,10 +195,10 @@ tombstones prevent unchanged desired requests from replaying. Explicit stop,
 omission, replacement retirement, clear, and destroy do not emit natural
 completion.
 
-`sampledPosition` makes coordinate-to-position evaluation deterministic, but
-Roblox still owns asset loading, weight fades, pose application, markers, and
-root motion. Verify those behaviors in Studio before choosing sampled playback
-for dependent content.
+`sampledPosition` makes time-position-to-physical-position evaluation
+deterministic, but Roblox still owns asset loading, weight fades, pose
+application, markers, and root motion. Verify those behaviors in Studio before
+choosing sampled playback for dependent content.
 
 ## Main API
 
@@ -210,8 +216,8 @@ Controller operations:
 
 - layers: `addLayer`, `hasLayer`, `play`, `stopLayer`;
 - composition: layer weight/speed/logical-priority/backend setters and getters;
-- readers: `setDefaultLogicalTimeReader`, `setLayerLogicalTimeReader`,
-  `setActivePlayLogicalTimeReader`;
+- readers: `setDefaultTimeReader`, `setLayerTimeReader`,
+  `setActivePlayTimeReader`;
 - parameters: raw, float, bool, trigger accessors;
 - physical position: `setTrackPosition`, `offsetTrackPosition`;
 - lifecycle/events: `on`, `update(sampleTime)`, `getDebugSnapshot`, `clear`,

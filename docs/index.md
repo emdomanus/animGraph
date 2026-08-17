@@ -6,8 +6,8 @@ coordinate, produces backend-neutral clip requests, and delegates physical
 playback to an injected backend.
 
 The package owns no engine clock or RunService connection. Consumers call
-`controller:update(sampleTime)` and provide `LogicalTimeReader` functions that
-map that coordinate to `{ position, addressRevision }`.
+`controller:update(sampleTime)` and provide `TimeReader` functions that return
+an atomic `{ position, rate }` time basis.
 
 ## Start here
 
@@ -25,12 +25,12 @@ caller-owned scheduler
         |
         | controller:update(sampleTime)
         v
-AnimationController --samples once--> selected LogicalTimeReader functions
+AnimationController --samples once--> selected TimeReader functions
         |
         | active play > layer > controller default
-        | atomic preflight, command commit, logical phase rebasing
+        | atomic sample preflight, command commit
         v
-LayerRuntime(s) --absolute logicalPosition--> MotionNode graph
+LayerRuntime(s) --timePosition + timeRate--> MotionNode graph
         |
         | validated ClipRequest[]
         v
@@ -40,23 +40,22 @@ backend:apply(sampleTime, requests)
         '-- sampledPosition: backend evaluates physical phase anchors
 ```
 
-A new play starts graph phase at zero. Forward source movement with an unchanged
-revision advances by the exact difference. Stationary/backward source movement,
-reader replacement, or an address revision holds graph phase and rebases the
-source baseline. A backward controller coordinate is rejected; an equal
-coordinate is legal and can re-evaluate newly queued commands.
+The reader's position is used literally; its rate is not inferred from position
+deltas. AnimGraph does not classify discontinuities or make reader replacement
+continuous. A backward controller coordinate is rejected; an equal coordinate
+is legal and can re-evaluate newly queued commands.
 
 ## Boundary
 
 AnimGraph owns:
 
 - typed layers, parameters, triggers, motions, and state machines;
-- selected-reader caching, sample validation, and monotonic logical phase;
+- selected-reader caching and atomic sample validation;
 - next-update graph-intent commands;
 - backend-neutral requests, synchronous physical positioning, and completion;
 - Roblox native-rate and sampled-position playback strategies.
 
-Consumers own scheduling, clock selection, discontinuity/revision policy,
-character policy, replication, VFX, content, and any pre-materialization
-position command. Logical graph phase and physical clip phase are deliberately
-separate.
+Consumers own scheduling, clock mapping, discontinuity policy, continuity
+offsets, native physical re-addressing, character policy, replication, VFX,
+content, and any pre-materialization position command. Graph time position and
+physical clip phase are deliberately separate.

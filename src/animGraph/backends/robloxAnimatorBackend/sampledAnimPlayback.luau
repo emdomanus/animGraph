@@ -25,14 +25,15 @@ export type SampledAnimPlaybackImpl<LayerT, StateT, ClipT> = NativeAnimPlayback.
 	_state: StateT?,
 	_weight: number,
 	_speed: number,
+	_timeRate: number,
 	_looped: boolean,
 	_logicalPriority: number,
 	_priority: Enum.AnimationPriority?,
 	_pendingPosition: AnimationPosition?,
 	_pendingOffsetSeconds: number,
 	_positionAnchor: number?,
-	_sampleTimeAnchor: number,
-	_lastSampleTime: number?,
+	_timePositionAnchor: number,
+	_lastTimePosition: number?,
 	_lifecycle: PlaybackLifecycle,
 }
 
@@ -78,45 +79,59 @@ local function latchCompleted<LayerT, StateT, ClipT>(
 	return true
 end
 
+local function desiredPlaybackSpeed<LayerT, StateT, ClipT>(
+	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>
+): number
+	return self._speed * self._timeRate
+end
+
 local function phaseOffset<LayerT, StateT, ClipT>(
 	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
-	sampleTime: number
+	timePosition: number
 ): number
-	local elapsed = assertFinite(sampleTime - self._sampleTimeAnchor, "sampled phase elapsed")
-	assert(elapsed >= 0, "sampleTime moved backward within sampled playback")
+	local elapsed = assertFinite(timePosition - self._timePositionAnchor, "sampled phase elapsed")
 	return assertFinite(self._speed * elapsed, "sampled phase offset")
 end
 
 local function resolveCurrent<LayerT, StateT, ClipT>(
 	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
-	sampleTime: number
+	timePosition: number
 ): (number?, boolean)
+	local basePosition = self._positionAnchor
+	local pendingOffset = 0
+	if basePosition == nil then
+		pendingOffset = self._pendingOffsetSeconds
+	end
+
+	local totalOffset = assertFinite(pendingOffset + phaseOffset(self, timePosition), "sampled total phase offset")
 	local length = self._track.Length
 	if length <= 0 then
 		return nil, false
 	end
 
-	local basePosition = self._positionAnchor
-	local pendingOffset = 0
 	if basePosition == nil then
 		local zeroPosition: AnimationPosition = { kind = "seconds", value = 0 }
 		local pendingPosition: AnimationPosition = self._pendingPosition or zeroPosition
-		basePosition = AnimationPosition.resolve(pendingPosition, length, self._looped, self._speed)
-		pendingOffset = self._pendingOffsetSeconds
+		basePosition = AnimationPosition.resolve(pendingPosition, length, self._looped, desiredPlaybackSpeed(self))
 	end
-
-	local totalOffset = assertFinite(pendingOffset + phaseOffset(self, sampleTime), "sampled total phase offset")
 	local resolvedBasePosition = basePosition
 	assert(resolvedBasePosition ~= nil, "sampled phase base did not resolve")
-	return AnimationPosition.resolveOffset(resolvedBasePosition, totalOffset, length, self._looped, self._speed)
+	return AnimationPosition.resolveOffset(
+		resolvedBasePosition,
+		totalOffset,
+		length,
+		self._looped,
+		desiredPlaybackSpeed(self)
+	)
 end
 
 local function writeCurrent<LayerT, StateT, ClipT>(
 	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
-	sampleTime: number,
+	timePosition: number,
 	rebase: boolean
 ): boolean
-	local resolved, completed = resolveCurrent(self, sampleTime)
+	self._lastTimePosition = timePosition
+	local resolved, completed = resolveCurrent(self, timePosition)
 	if resolved == nil then
 		return false
 	end
@@ -126,7 +141,7 @@ local function writeCurrent<LayerT, StateT, ClipT>(
 		self._positionAnchor = resolved
 		self._pendingPosition = nil
 		self._pendingOffsetSeconds = 0
-		self._sampleTimeAnchor = sampleTime
+		self._timePositionAnchor = timePosition
 	end
 	if completed then
 		return latchCompleted(self)
@@ -136,20 +151,20 @@ end
 
 local function rebaseAt<LayerT, StateT, ClipT>(
 	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
-	sampleTime: number
+	timePosition: number
 ): ()
-	local resolved = resolveCurrent(self, sampleTime)
+	local resolved = resolveCurrent(self, timePosition)
 	if resolved ~= nil then
 		self._positionAnchor = resolved
 		self._pendingPosition = nil
 		self._pendingOffsetSeconds = 0
 	else
 		self._pendingOffsetSeconds = assertFinite(
-			self._pendingOffsetSeconds + phaseOffset(self, sampleTime),
+			self._pendingOffsetSeconds + phaseOffset(self, timePosition),
 			"pending sampled phase offset"
 		)
 	end
-	self._sampleTimeAnchor = sampleTime
+	self._timePositionAnchor = timePosition
 end
 
 local function ensurePlaying<LayerT, StateT, ClipT>(
@@ -185,14 +200,15 @@ function SampledAnimPlayback.new<LayerT, StateT, ClipT>(
 	self._state = nil
 	self._weight = 0
 	self._speed = 1
+	self._timeRate = 1
 	self._looped = false
 	self._logicalPriority = 0
 	self._priority = nil
 	self._pendingPosition = nil
 	self._pendingOffsetSeconds = 0
 	self._positionAnchor = nil
-	self._sampleTimeAnchor = 0
-	self._lastSampleTime = nil
+	self._timePositionAnchor = 0
+	self._lastTimePosition = nil
 	self._lifecycle = "active"
 	self._stoppedConnection = track.Stopped:Connect(function()
 		config.onStopped(config.generation)
@@ -206,46 +222,51 @@ end
 
 function SampledAnimPlayback.start<LayerT, StateT, ClipT>(
 	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
-	sampleTime: number,
+	_sampleTime: number,
 	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 	robloxPriority: Enum.AnimationPriority
 ): boolean
 	assert(self._lifecycle == "active", "cannot start an inactive playback generation")
-	assertFinite(sampleTime, "sampleTime")
-
 	self._layer = request.layer
 	self._state = request.state
 	self._weight = math.max(request.weight, 0)
 	self._speed = request.speed
+	self._timeRate = request.timeRate
 	self._looped = request.looped
 	self._logicalPriority = request.logicalPriority
 	self._priority = robloxPriority
 	self._pendingPosition = copyPosition(request.initialPosition) or { kind = "seconds", value = 0 }
 	self._pendingOffsetSeconds = 0
 	self._positionAnchor = nil
-	self._sampleTimeAnchor = sampleTime
-	self._lastSampleTime = sampleTime
+	self._timePositionAnchor = request.timePosition
+	self._lastTimePosition = request.timePosition
 
 	local track = self._track
 	track.Looped = self._looped
 	track.Priority = robloxPriority
 	track:Play(request.fadeTime, self._weight, 0)
-	return writeCurrent(self, sampleTime, true)
+	return writeCurrent(self, request.timePosition, true)
+end
+
+function SampledAnimPlayback.preflightApply<LayerT, StateT, ClipT>(
+	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
+	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
+): ()
+	if self._lifecycle ~= "active" then
+		return
+	end
+	resolveCurrent(self, request.timePosition)
 end
 
 function SampledAnimPlayback.apply<LayerT, StateT, ClipT>(
 	self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
-	sampleTime: number,
+	_sampleTime: number,
 	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 	robloxPriority: Enum.AnimationPriority
 ): boolean
 	if self._lifecycle ~= "active" then
 		return false
 	end
-	assertFinite(sampleTime, "sampleTime")
-	local lastSampleTime = self._lastSampleTime
-	assert(lastSampleTime == nil or sampleTime >= lastSampleTime, "sampleTime moved backward within sampled playback")
-
 	self._layer = request.layer
 	self._state = request.state
 	self._logicalPriority = request.logicalPriority
@@ -254,10 +275,11 @@ function SampledAnimPlayback.apply<LayerT, StateT, ClipT>(
 	local speedChanged = request.speed ~= self._speed
 	local loopedChanged = request.looped ~= self._looped
 	if speedChanged or loopedChanged then
-		rebaseAt(self, sampleTime)
+		rebaseAt(self, request.timePosition)
 	end
 
 	self._speed = request.speed
+	self._timeRate = request.timeRate
 	if loopedChanged then
 		self._looped = request.looped
 		track.Looped = request.looped
@@ -272,8 +294,7 @@ function SampledAnimPlayback.apply<LayerT, StateT, ClipT>(
 	end
 
 	ensurePlaying(self)
-	self._lastSampleTime = sampleTime
-	return writeCurrent(self, sampleTime, false)
+	return writeCurrent(self, request.timePosition, false)
 end
 
 function SampledAnimPlayback.setPosition<LayerT, StateT, ClipT>(
@@ -281,14 +302,14 @@ function SampledAnimPlayback.setPosition<LayerT, StateT, ClipT>(
 	position: AnimationPosition
 ): boolean
 	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
-	local sampleTime = self._lastSampleTime
-	assert(sampleTime ~= nil, "sampled playback generation has not started")
+	local timePosition = self._lastTimePosition
+	assert(timePosition ~= nil, "sampled playback generation has not started")
 
 	self._pendingPosition = copyPosition(position)
 	self._pendingOffsetSeconds = 0
 	self._positionAnchor = nil
-	self._sampleTimeAnchor = sampleTime
-	return writeCurrent(self, sampleTime, true)
+	self._timePositionAnchor = timePosition
+	return writeCurrent(self, timePosition, true)
 end
 
 function SampledAnimPlayback.offsetPosition<LayerT, StateT, ClipT>(
@@ -297,9 +318,9 @@ function SampledAnimPlayback.offsetPosition<LayerT, StateT, ClipT>(
 ): boolean
 	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
 	AnimationPosition.assertFiniteSeconds(deltaSeconds, "deltaSeconds")
-	local sampleTime = self._lastSampleTime
-	assert(sampleTime ~= nil, "sampled playback generation has not started")
-	rebaseAt(self, sampleTime)
+	local timePosition = self._lastTimePosition
+	assert(timePosition ~= nil, "sampled playback generation has not started")
+	rebaseAt(self, timePosition)
 
 	local length = self._track.Length
 	local positionAnchor = self._positionAnchor
@@ -309,7 +330,7 @@ function SampledAnimPlayback.offsetPosition<LayerT, StateT, ClipT>(
 			deltaSeconds,
 			length,
 			self._looped,
-			self._speed
+			desiredPlaybackSpeed(self)
 		)
 		self._positionAnchor = resolved
 		self._track.TimePosition = resolved

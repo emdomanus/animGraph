@@ -22,6 +22,9 @@ function RequestValidation.validate<LayerT, StateT, ClipT, LayerBackendT>(
 		seenTrackKeys[request.trackKey] = true
 		assertFinite(request.weight, "request weight")
 		assertFinite(request.speed, "request speed")
+		assertFinite(request.timePosition, "request timePosition")
+		assertFinite(request.timeRate, "request timeRate")
+		assertFinite(request.speed * request.timeRate, "request composed speed")
 		assertFinite(request.logicalPriority, "request logicalPriority")
 		assertFinite(request.fadeTime, "request fadeTime")
 		assert(request.fadeTime >= 0, "request fadeTime must be non-negative")

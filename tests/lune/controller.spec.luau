@@ -102,23 +102,27 @@ local function newBackend(): any
 	return backend
 end
 
-local function sample(position: number, addressRevision: number?): any
+local function sample(position: number, rate: number?): any
 	return {
 		position = position,
-		addressRevision = addressRevision or 0,
+		rate = if rate ~= nil then rate else 1,
 	}
 end
 
 local function makeMotion(trackKey: string, clip: string, speed: number, observations: any?): any
 	local state = observations or {
 		evaluations = 0,
-		logicalPositions = {} :: { number },
+		timePositions = {} :: { number },
+		timeRates = {} :: { number },
 	}
 
 	return {
 		evaluate = function(_, context)
 			state.evaluations += 1
-			state.logicalPositions[#state.logicalPositions + 1] = context.logicalPosition
+			state.timePositions = state.timePositions or {}
+			state.timeRates = state.timeRates or {}
+			state.timePositions[#state.timePositions + 1] = context.timePosition
+			state.timeRates[#state.timeRates + 1] = context.timeRate
 			if state.parameter ~= nil then
 				state.parameterValues = state.parameterValues or {}
 				state.parameterValues[state.evaluations] = context.getParameter(state.parameter)
@@ -136,6 +140,8 @@ local function makeMotion(trackKey: string, clip: string, speed: number, observa
 					clip = clip,
 					weight = if overrides ~= nil and overrides.weight ~= nil then overrides.weight else 1,
 					speed = if overrides ~= nil and overrides.speed ~= nil then overrides.speed else speed,
+					timePosition = context.timePosition,
+					timeRate = context.timeRate,
 					initialPosition = if overrides ~= nil then overrides.initialPosition else nil,
 					looped = if overrides ~= nil and overrides.looped ~= nil then overrides.looped else false,
 					logicalPriority = context.logicalPriority,
@@ -172,15 +178,15 @@ local ok, result = pcall(function(): number
 		local backend = newBackend()
 		local calls = 0
 		local observedTimes = {} :: { number }
-		local logicalPosition = 5
+		local timePosition = 5
 		local reader = function(sampleTime: number): any
 			calls += 1
 			observedTimes[#observedTimes + 1] = sampleTime
-			return sample(logicalPosition)
+			return sample(timePosition, -0.5)
 		end
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = reader,
+			timeReader = reader,
 			layers = { { id = "base" }, { id = "action" } },
 		})
 		controller:play("base", makeMotion("base/idle", "idle", 1))
@@ -192,6 +198,8 @@ local ok, result = pcall(function(): number
 		assert(observedTimes[1] == 40 and observedTimes[2] == 40, "reader received the wrong coordinate")
 		assert(backend.applyCount == 2, "stationary coordinate skipped backend apply")
 		assert(backend.sampleTimes[1] == 40 and backend.sampleTimes[2] == 40, "backend received a different coordinate")
+		assert(backend.batches[1][1].timePosition == 5 and backend.batches[1][1].timeRate == -0.5, "sample was split")
+		assert(backend.batches[1][2].timePosition == 5 and backend.batches[1][2].timeRate == -0.5, "sample was not shared")
 	end)
 
 	test("uses active-play then layer then controller reader precedence", function(): ()
@@ -209,54 +217,48 @@ local ok, result = pcall(function(): number
 		local playReader = reader("play", 4)
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = defaultReader,
+			timeReader = defaultReader,
 			layers = {
 				{ id = "default" },
-				{ id = "layer", logicalTimeReader = layerReader },
-				{ id = "play", logicalTimeReader = shadowReader },
+				{ id = "layer", timeReader = layerReader },
+				{ id = "play", timeReader = shadowReader },
 			},
 		})
 		controller:play("default", makeMotion("default", "idle", 1))
 		controller:play("layer", makeMotion("layer", "idle", 1))
-		controller:play("play", makeMotion("play", "idle", 1), { logicalTimeReader = playReader })
+		controller:play("play", makeMotion("play", "idle", 1), { timeReader = playReader })
 		controller:update(10)
 
 		assert(calls.default == 1 and calls.layer == 1 and calls.play == 1, "selected readers were not sampled")
 		assert(calls.shadow == 0, "active-play reader did not shadow the layer reader")
 	end)
 
-	test("advances only on forward same-revision reader movement", function(): ()
+	test("uses reader position and rate literally without discontinuity policy", function(): ()
 		local backend = newBackend()
 		local current = sample(10, 1)
-		local observations = { evaluations = 0, logicalPositions = {} :: { number } }
+		local observations = { evaluations = 0, timePositions = {} :: { number }, timeRates = {} :: { number } }
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				return current
 			end,
 			layers = { { id = "base", speed = 2 } },
 		})
 		controller:play("base", makeMotion("base", "idle", 1.5, observations))
 		controller:update(0)
-		current = sample(12, 1)
+		current = sample(12, -0.5)
 		controller:update(1)
-		current = sample(12, 1)
+		current = sample(5, 0)
 		controller:update(2)
-		current = sample(5, 1)
-		controller:update(3)
-		current = sample(6, 1)
-		controller:update(4)
 		current = sample(100, 2)
-		controller:update(5)
-		current = sample(102, 2)
-		controller:update(6)
+		controller:update(3)
 
-		assert(
-			table.concat(observations.logicalPositions, ",") == "0,2,2,2,3,3,5",
-			"logical phase did not hold/rebase correctly"
-		)
-		for _, batch in backend.batches do
-			assert(batch[1].speed == 3, "logical phase affected signed physical speed")
+		assert(table.concat(observations.timePositions, ",") == "10,12,5,100", "reader position was rewritten")
+		assert(table.concat(observations.timeRates, ",") == "1,-0.5,0,2", "reader rate was rewritten")
+		for index, batch in backend.batches do
+			assert(batch[1].speed == 3, "time sampling changed request speed")
+			assert(batch[1].timePosition == observations.timePositions[index], "request lost literal time position")
+			assert(batch[1].timeRate == observations.timeRates[index], "request lost literal time rate")
 			assert(batch[1].deltaTime == nil, "legacy deltaTime leaked into a request")
 		end
 	end)
@@ -266,7 +268,7 @@ local ok, result = pcall(function(): number
 		local readerCalls = 0
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				readerCalls += 1
 				return sample(0)
 			end,
@@ -294,16 +296,16 @@ local ok, result = pcall(function(): number
 		local backend = newBackend()
 		local base = sample(1)
 		local action: any = sample(1)
-		local baseObservations = { evaluations = 0, logicalPositions = {} :: { number } }
-		local actionObservations = { evaluations = 0, logicalPositions = {} :: { number } }
+		local baseObservations = { evaluations = 0, timePositions = {} :: { number } }
+		local actionObservations = { evaluations = 0, timePositions = {} :: { number } }
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				return base
 			end,
 			layers = {
 				{ id = "base" },
-				{ id = "action", logicalTimeReader = function(_sampleTime: number): any
+				{ id = "action", timeReader = function(_sampleTime: number): any
 					return action
 				end },
 			},
@@ -311,14 +313,14 @@ local ok, result = pcall(function(): number
 		controller:play("base", makeMotion("base", "idle", 1, baseObservations))
 		controller:play("action", makeMotion("action", "wave", 1, actionObservations))
 		controller:setBool("armed", true)
-		action = { position = math.huge, addressRevision = 0 }
+		action = { position = math.huge, rate = 1 }
 		expectError(function()
 			controller:update(1)
 		end, "invalid reader sample was accepted")
-		action = { position = 2, addressRevision = 0 / 0 }
+		action = { position = 2, rate = 0 / 0 }
 		expectError(function()
 			controller:update(1)
-		end, "invalid reader revision was accepted")
+		end, "invalid reader rate was accepted")
 		assert(backend.applyCount == 0, "invalid reader batch reached backend")
 		assert(controller:getParameter("armed") == nil, "invalid reader batch committed parameters")
 		assert(not controller:getDebugSnapshot().layers[1].isPlaying, "invalid reader batch committed play")
@@ -326,10 +328,10 @@ local ok, result = pcall(function(): number
 		action = sample(2)
 		controller:update(1)
 		assert(controller:getBool("armed"), "queued commands did not survive invalid reader batch")
-		assert(baseObservations.logicalPositions[1] == 0 and actionObservations.logicalPositions[1] == 0, "first phase was not zero")
+		assert(baseObservations.timePositions[1] == 1 and actionObservations.timePositions[1] == 2, "reader positions were not literal")
 	end)
 
-	test("stages controller-default reader replacement and rebases phase", function(): ()
+	test("stages controller-default reader replacement and uses its literal coordinate", function(): ()
 		local backend = newBackend()
 		local firstPosition = 0
 		local secondPosition = 100
@@ -339,34 +341,34 @@ local ok, result = pcall(function(): number
 		local secondReader = function(_sampleTime: number): any
 			return sample(secondPosition)
 		end
-		local observations = { evaluations = 0, logicalPositions = {} :: { number } }
+		local observations = { evaluations = 0, timePositions = {} :: { number } }
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = firstReader,
+			timeReader = firstReader,
 			layers = { { id = "base" } },
 		})
 		controller:play("base", makeMotion("base", "idle", 1, observations))
 		controller:update(0)
 		firstPosition = 2
 		controller:update(1)
-		controller:setDefaultLogicalTimeReader(secondReader)
+		controller:setDefaultTimeReader(secondReader)
 		controller:update(1)
 		secondPosition = 103
 		controller:update(2)
-		assert(table.concat(observations.logicalPositions, ",") == "0,2,2,5", "default reader did not rebase")
+		assert(table.concat(observations.timePositions, ",") == "0,2,100,103", "replacement reader was not literal")
 	end)
 
 	test("stages graph intent and re-evaluates at the same coordinate", function(): ()
 		local backend = newBackend()
 		local observations = {
 			evaluations = 0,
-			logicalPositions = {} :: { number },
+			timePositions = {} :: { number },
 			parameter = "blend",
 			parameterValues = {} :: { any },
 		}
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				return sample(0)
 			end,
 			layers = { { id = "base" } },
@@ -385,7 +387,7 @@ local ok, result = pcall(function(): number
 
 		controller:setFloat("blend", 0.75)
 		controller:update(10)
-		assert(observations.logicalPositions[2] == 0, "same-coordinate evaluation advanced logical phase")
+		assert(observations.timePositions[2] == 0, "same-coordinate evaluation changed time position")
 		assert(observations.parameterValues[2] == 0.75, "same-coordinate evaluation did not see new intent")
 	end)
 
@@ -395,13 +397,13 @@ local ok, result = pcall(function(): number
 		local queued = false
 		local observations = {
 			evaluations = 0,
-			logicalPositions = {} :: { number },
+			timePositions = {} :: { number },
 			parameter = "fromReader",
 			parameterValues = {} :: { any },
 		}
 		controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				if not queued then
 					queued = true
 					controller:setBool("fromReader", true)
@@ -417,7 +419,80 @@ local ok, result = pcall(function(): number
 		assert(observations.parameterValues[2] == true, "reader-issued command was not retained for the next update")
 	end)
 
-	test("reader changes hold phase and take effect transactionally", function(): ()
+	test("reader clear invalidates the update and preserves post-clear intent", function(): ()
+		local backend = newBackend()
+		local controller: any = nil
+		local cleared = false
+		controller = AnimationController.new({
+			backend = backend,
+			timeReader = function(_sampleTime: number): any
+				if not cleared then
+					cleared = true
+					controller:clear()
+					controller:play("base", makeMotion("replacement", "wave", 1))
+				end
+				return sample(0)
+			end,
+			layers = { { id = "base" } },
+		})
+		controller:play("base", makeMotion("stale", "idle", 1))
+
+		controller:update(0)
+		assert(backend.clearCount == 1 and backend.applyCount == 0, "clear was undone by the active update")
+		assert(not controller:getDebugSnapshot().layers[1].isPlaying, "stale play committed after clear")
+
+		controller:update(0)
+		assert(backend.applyCount == 1, "post-clear play was not retained for the next update")
+		assert(backend.batches[1][1].clip == "wave", "the stale pre-clear play was resurrected")
+	end)
+
+	test("reader destroy invalidates the update permanently", function(): ()
+		local backend = newBackend()
+		local controller: any = nil
+		controller = AnimationController.new({
+			backend = backend,
+			timeReader = function(_sampleTime: number): any
+				controller:destroy()
+				return sample(0)
+			end,
+			layers = { { id = "base" } },
+		})
+		controller:play("base", makeMotion("stale", "idle", 1))
+
+		controller:update(0)
+		assert(backend.clearCount == 1 and backend.destroyCount == 1, "reader destroy did not tear down the backend")
+		assert(backend.applyCount == 0, "destroyed controller reached backend apply")
+		assert(not controller:getDebugSnapshot().layers[1].isPlaying, "play committed after destroy")
+	end)
+
+	test("state-machine event clear discards requests from the invalidated evaluation", function(): ()
+		local backend = newBackend()
+		local machine = StateMachineRuntime.new({
+			initialState = "idle",
+			states = {
+				{ id = "idle", motion = ClipNode.new("idle") },
+				{ id = "run", motion = ClipNode.new("run") },
+			},
+			transitions = { { from = "idle", to = "run", duration = 1 } },
+		})
+		local controller = AnimationController.new({
+			backend = backend,
+			timeReader = function(_sampleTime: number): any
+				return sample(0)
+			end,
+			layers = { { id = "base" } },
+		})
+		controller:on("transitionStarted", function()
+			controller:clear()
+		end)
+		controller:play("base", machine)
+
+		controller:update(0)
+		assert(backend.clearCount == 1 and backend.applyCount == 0, "event clear rematerialized tracks")
+		assert(not controller:getDebugSnapshot().layers[1].isPlaying, "event clear left the layer active")
+	end)
+
+	test("reader changes take effect transactionally at their literal coordinates", function(): ()
 		local backend = newBackend()
 		local defaultPosition = 0
 		local layerPosition = 100
@@ -431,38 +506,38 @@ local ok, result = pcall(function(): number
 		local playReader = function(_sampleTime: number): any
 			return sample(playPosition)
 		end
-		local observations = { evaluations = 0, logicalPositions = {} :: { number } }
+		local observations = { evaluations = 0, timePositions = {} :: { number } }
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = defaultReader,
+			timeReader = defaultReader,
 			layers = { { id = "base" } },
 		})
 		controller:play("base", makeMotion("base", "idle", 1, observations))
 		controller:update(0)
 		defaultPosition = 2
 		controller:update(1)
-		controller:setLayerLogicalTimeReader("base", layerReader)
+		controller:setLayerTimeReader("base", layerReader)
 		controller:update(1)
 		layerPosition = 103
 		controller:update(2)
-		controller:setActivePlayLogicalTimeReader("base", playReader)
+		controller:setActivePlayTimeReader("base", playReader)
 		controller:update(2)
 		playPosition = 204
 		controller:update(3)
-		controller:setActivePlayLogicalTimeReader("base", nil)
+		controller:setActivePlayTimeReader("base", nil)
 		controller:update(3)
 		layerPosition = 105
 		controller:update(4)
 
 		assert(
-			table.concat(observations.logicalPositions, ",") == "0,2,2,5,5,9,9,11",
-			"reader changes did not hold/rebase phase"
+			table.concat(observations.timePositions, ",") == "0,2,100,103,200,204,103,105",
+			"reader changes did not expose literal positions"
 		)
 	end)
 
-	test("transition progress derives from logical position anchors", function(): ()
+	test("transition progress derives from time-position anchors", function(): ()
 		local backend = newBackend()
-		local logicalPosition = 20
+		local timePosition = 20
 		local machine = StateMachineRuntime.new({
 			initialState = "idle",
 			states = {
@@ -473,30 +548,69 @@ local ok, result = pcall(function(): number
 		})
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
-				return sample(logicalPosition)
+			timeReader = function(_sampleTime: number): any
+				return sample(timePosition)
 			end,
 			layers = { { id = "base" } },
 		})
 		controller:play("base", machine)
 		controller:update(0)
-		assert(machine:getDebugSnapshot().details.transition.progress == 0, "transition did not start at its phase anchor")
-		logicalPosition = 21
+		assert(machine:getDebugSnapshot().details.transition.progress == 0, "transition did not start at its time anchor")
+		timePosition = 21
 		controller:update(1)
-		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "transition did not sample absolute phase")
+		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "transition did not sample time position")
 		controller:setFloat("irrelevant", 1)
 		controller:update(1)
 		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "same-coordinate command advanced transition")
+		timePosition = 10
+		controller:update(2)
+		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "backward time rolled transition back")
+		timePosition = 10.5
+		controller:update(3)
+		assert(machine:getDebugSnapshot().details.transition.progress == 0.75, "transition stalled behind its old anchor")
 	end)
 
-	test("keeps physical positioning synchronous and phase-neutral", function(): ()
+	test("replaying an active state machine does not regress transition progress", function(): ()
 		local backend = newBackend()
-		local logicalPosition = 4
-		local observations = { evaluations = 0, logicalPositions = {} :: { number } }
+		local sourcePosition = 20
+		local machine = StateMachineRuntime.new({
+			initialState = "idle",
+			states = {
+				{ id = "idle", motion = ClipNode.new("idle") },
+				{ id = "run", motion = ClipNode.new("run") },
+			},
+			transitions = { { from = "idle", to = "run", duration = 2 } },
+		})
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
-				return sample(logicalPosition)
+			timeReader = function(_sampleTime: number): any
+				return sample(sourcePosition)
+			end,
+			layers = { { id = "base" } },
+		})
+		controller:play("base", machine)
+		controller:update(0)
+		sourcePosition = 21
+		controller:update(1)
+		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "transition did not reach midpoint")
+
+		controller:play("base", machine)
+		controller:update(1)
+		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "replay moved transition backward")
+
+		sourcePosition = 21.5
+		controller:update(2)
+		assert(machine:getDebugSnapshot().details.transition.progress == 0.75, "replayed transition did not continue")
+	end)
+
+	test("keeps physical positioning synchronous and graph-neutral", function(): ()
+		local backend = newBackend()
+		local timePosition = 4
+		local observations = { evaluations = 0, timePositions = {} :: { number } }
+		local controller = AnimationController.new({
+			backend = backend,
+			timeReader = function(_sampleTime: number): any
+				return sample(timePosition)
 			end,
 			layers = { { id = "base" } },
 		})
@@ -505,16 +619,16 @@ local ok, result = pcall(function(): number
 		assert(controller:setTrackPosition("base/idle", { kind = "seconds", value = 3 }), "position was rejected")
 		assert(controller:offsetTrackPosition("base/idle", -1.25), "offset was rejected")
 		assert(#backend.positionCalls == 1 and #backend.offsetCalls == 1, "physical command was staged")
-		logicalPosition = 6
+		timePosition = 6
 		controller:update(1)
-		assert(observations.logicalPositions[2] == 2, "physical positioning rewrote logical phase")
+		assert(observations.timePositions[2] == 6, "physical positioning changed graph time")
 	end)
 
 	test("validates assembled requests before backend apply", function(): ()
 		local backend = newBackend()
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				return sample(0)
 			end,
 			layers = { { id = "base" }, { id = "action" } },
@@ -529,12 +643,12 @@ local ok, result = pcall(function(): number
 
 	test("consumes one-shot play positioning only after emission", function(): ()
 		local backend = newBackend()
-		local observations = { evaluations = 0, logicalPositions = {} :: { number }, emitAfter = 2 }
-		local logicalPosition = 0
+		local observations = { evaluations = 0, timePositions = {} :: { number }, emitAfter = 2 }
+		local timePosition = 0
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
-				return sample(logicalPosition)
+			timeReader = function(_sampleTime: number): any
+				return sample(timePosition)
 			end,
 			layers = { { id = "base" } },
 		})
@@ -543,9 +657,9 @@ local ok, result = pcall(function(): number
 			forceRestart = true,
 		})
 		controller:update(0)
-		logicalPosition = 1
+		timePosition = 1
 		controller:update(1)
-		logicalPosition = 2
+		timePosition = 2
 		controller:update(2)
 		assert(backend.batches[2][1].initialPosition.value == 0.5, "initial position was consumed too early")
 		assert(backend.batches[3][1].initialPosition == nil, "initial position was emitted twice")
@@ -555,7 +669,7 @@ local ok, result = pcall(function(): number
 		local backend = newBackend()
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				return sample(0)
 			end,
 			layers = { { id = "base", defaultFadeOut = 0.75 } },
@@ -573,7 +687,7 @@ local ok, result = pcall(function(): number
 		local backend = newBackend()
 		local controller = AnimationController.new({
 			backend = backend,
-			logicalTimeReader = function(_sampleTime: number): any
+			timeReader = function(_sampleTime: number): any
 				return sample(0)
 			end,
 		})

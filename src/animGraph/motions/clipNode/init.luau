@@ -88,6 +88,8 @@ function ClipNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		clip = self._clip,
 		weight = optionNumber(if overrides ~= nil then overrides.weight else nil, self._weight),
 		speed = optionNumber(if overrides ~= nil then overrides.speed else nil, self._speed),
+		timePosition = context.timePosition,
+		timeRate = context.timeRate,
 		initialPosition = if overrides ~= nil and overrides.initialPosition ~= nil
 			then overrides.initialPosition
 			else self._initialPosition,

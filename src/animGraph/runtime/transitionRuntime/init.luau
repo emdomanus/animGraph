@@ -33,16 +33,20 @@ function TransitionRuntime.new<StateT, ParamT>(
 	self._toState = definition.to
 	self._duration = duration
 	self._startPosition = startPosition
-	self._logicalPosition = startPosition
+	self._timePosition = startPosition
 
 	return self
 end
 
 function TransitionRuntime.update<StateT, ParamT>(
 	self: TransitionRuntimeImpl<StateT, ParamT>,
-	logicalPosition: number
+	timePosition: number
 ): ()
-	self._logicalPosition = logicalPosition
+	local previousPosition = self._timePosition
+	if timePosition < previousPosition then
+		self._startPosition += timePosition - previousPosition
+	end
+	self._timePosition = timePosition
 end
 
 function TransitionRuntime.getAlpha<StateT, ParamT>(
@@ -52,7 +56,7 @@ function TransitionRuntime.getAlpha<StateT, ParamT>(
 		return 1
 	end
 
-	return math.clamp((self._logicalPosition - self._startPosition) / self._duration, 0, 1)
+	return math.clamp((self._timePosition - self._startPosition) / self._duration, 0, 1)
 end
 
 function TransitionRuntime.isComplete<StateT, ParamT>(
@@ -69,7 +73,7 @@ function TransitionRuntime.getDebugSnapshot<StateT, ParamT>(
 		fromState = self._fromState,
 		toState = self._toState,
 		duration = self._duration,
-		elapsed = math.clamp(self._logicalPosition - self._startPosition, 0, self._duration),
+		elapsed = math.clamp(self._timePosition - self._startPosition, 0, self._duration),
 		progress = self:getAlpha(),
 	}
 end

@@ -18,8 +18,8 @@ local RobloxAnimatorBackendTypes = require(script.backends.robloxAnimatorBackend
 local StackModifierTypes = require(script.components.stackModifier)
 
 export type AnimationPosition = DefTypes.AnimationPosition
-export type LogicalTimeSample = DefTypes.LogicalTimeSample
-export type LogicalTimeReader = DefTypes.LogicalTimeReader
+export type TimeSample = DefTypes.TimeSample
+export type TimeReader = DefTypes.TimeReader
 export type Release = DefTypes.Release
 export type TrackCompletedEvent<LayerT, StateT> = DefTypes.TrackCompletedEvent<LayerT, StateT>
 

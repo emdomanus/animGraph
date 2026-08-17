@@ -7,8 +7,8 @@ namespace instead of requiring implementation modules.
 ## Shared Definitions
 
 - `AnimationPosition`
-- `LogicalTimeSample`
-- `LogicalTimeReader`
+- `TimeSample`
+- `TimeReader`
 - `Release`
 - `TrackCompletedEvent<LayerT, StateT>`
 

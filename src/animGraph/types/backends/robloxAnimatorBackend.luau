@@ -56,6 +56,7 @@ export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
 		_nextGeneration: number,
 		_applyDepth: number,
 		_dispatchingCompletions: boolean,
+		_lifecycleEpoch: number,
 		_warnings: { string },
 		_destroyed: boolean,
 

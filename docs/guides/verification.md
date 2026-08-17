@@ -10,16 +10,22 @@ not prove behavior that depends on real `AnimationTrack` signals or timing.
 lune run tests/lune/run.luau
 ```
 
-The expected baseline is **80/80 tests** across smoke, controller,
+The expected baseline is **87/87 tests** across smoke, controller,
 native-Roblox-backend, and sampled-Roblox-backend seam suites. The controller
 suite proves explicit finite/monotonic coordinates, equal-coordinate
-re-evaluation, once-per-reader caching, reader precedence, revision and backward
-source rebasing, queued graph intent, atomic invalid-sample rejection, and
-transition start-position anchors. The backend suites prove both fixed position
-strategies, request validation, initial/live positioning semantics, idempotent
-native apply, sampled physical phase rebasing, unresolved-length sampling,
-generation retirement, tombstones, completion dispatch, stale-signal
-suppression, and re-entrant lifecycle behavior. CP-AG-P additionally proves finite
+re-evaluation, one atomic `{ position, rate }` read per selected reader, reader
+precedence, literal position/replacement behavior, signed and zero rate, queued
+graph intent, atomic invalid-sample rejection, and transition start-position
+anchors. It also proves that reader/event-driven `clear` or `destroy`
+invalidates the active update and that replay cannot regress or stall an active
+transition. The backend suites prove both fixed position strategies, native
+speed/rate composition without property churn, sampled forward/held/reverse/
+nonlinear position evaluation, speed rebasing, request validation, initial/live
+positioning semantics, unresolved-length sampling, generation retirement,
+tombstones, completion dispatch, stale-signal suppression, and re-entrant
+lifecycle behavior. Sampled coverage includes atomic derived-arithmetic
+rejection, apply-depth recovery after exceptions, and resolver-driven lifecycle
+invalidation. CP-AG-P additionally proves finite
 relative-offset validation, exact boolean semantics, atomic known-length
 read/modify/write, looping modulo, direction-aware terminals, unresolved
 absolute/relative ordering, one-write resolution, reverse position-before-speed,
@@ -81,7 +87,7 @@ the SVG palette follows the site's light and dark appearances.
 The [Studio Verification](./studio-verification.md) page is the canonical
 record for Rojo-connected engine evidence and the historical CP-TA3, CP-AG-R,
 and CP-AG-P operator results. Studio evidence is intentionally separate from
-the current 80 deterministic tests and from static analysis. It covers native
+the current 87 deterministic tests and from static analysis. It covers native
 `AnimationTrack` length, signal order, fade timing, physical cleanup, loop
 behavior, and re-entry that host fakes cannot establish.
 

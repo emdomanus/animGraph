@@ -5,12 +5,12 @@ Source: `src/animGraph/controller/animationController/init.luau`
 ```luau
 local controller = AnimGraph.new({
 	backend = backend,
-	logicalTimeReader = defaultReader,
+	timeReader = defaultReader,
 	layers = layerDefinitions,
 })
 ```
 
-`backend` and `logicalTimeReader` are required. `layers` is optional because
+`backend` and `timeReader` are required. `layers` is optional because
 layers may be added later.
 
 ## Timing contract
@@ -25,21 +25,24 @@ returns:
 
 ```luau
 {
-	position = logicalSourcePosition,
-	addressRevision = discontinuityRevision,
+	position = timePosition,
+	rate = timeRate,
 }
 ```
 
 Reader resolution is controller default, then layer override, then active-play
-override. Use `LayerPlayOptions.logicalTimeReader`,
-`LayerDefinition.logicalTimeReader`, or the runtime setters listed below. There
-are no motion-node/subtree readers.
+override. Use `LayerPlayOptions.timeReader`, `LayerDefinition.timeReader`, or
+the runtime setters listed below. There are no motion-node/subtree readers.
 
 The controller preflights all selected samples before mutation. Invalid sample
-data rejects the complete update and preserves pending commands and prior
-baselines. A new play starts logical phase at zero. Forward same-revision source
-movement advances it; stationary/backward movement and revision/reader changes
-hold and rebase it.
+data rejects the complete update and preserves pending commands. Position and
+rate are used literally and atomically; the controller does not derive rate,
+classify discontinuities, or make reader replacement continuous.
+
+Borrowed readers and graph-event listeners may call back into the controller.
+If either invokes `clear` or `destroy`, a lifecycle epoch invalidates the active
+update before stale command commit or backend apply. Commands deliberately
+issued after `clear` remain queued for the next update; `destroy` remains final.
 
 The caller owns scheduling:
 
@@ -56,10 +59,11 @@ Graph-intent calls take effect at the next valid update:
 - `play` and `stopLayer`;
 - parameter/float/bool/trigger writes;
 - layer weight, speed, logical priority, and backend data;
-- logical-time reader changes.
+- time-reader changes.
 
 Getters expose committed state. Calling `update` again at the same coordinate
-applies new commands without advancing logical transition progress.
+applies new commands without advancing a transition when the reader returns the
+same position.
 
 `setTrackPosition` and `offsetTrackPosition` are synchronous physical-
 generation operations, not queued graph intent. `clear` and `destroy` are also
@@ -75,9 +79,9 @@ immediate lifecycle boundaries.
 - `setLayerSpeed` / `getLayerSpeed`
 - `setLayerLogicalPriority` / `getLayerLogicalPriority`
 - `setLayerBackend` / `getLayerBackend`
-- `setDefaultLogicalTimeReader(reader)`
-- `setLayerLogicalTimeReader(layer, reader?)`
-- `setActivePlayLogicalTimeReader(layer, reader?)`
+- `setDefaultTimeReader(reader)`
+- `setLayerTimeReader(layer, reader?)`
+- `setActivePlayTimeReader(layer, reader?)`
 - parameter, float, bool, and trigger accessors
 - `setTrackPosition(trackKey, position) -> boolean`
 - `offsetTrackPosition(trackKey, deltaSeconds) -> boolean`
@@ -88,9 +92,11 @@ immediate lifecycle boundaries.
 - `destroy()`
 
 `LayerPlayOptions.initialPosition` and `forceRestart` are one-shot request
-commands consumed only after the play first emits requests. A play-scoped
-logical-time reader persists for that active play unless changed through the
-runtime setter.
+commands consumed only after the play first emits requests. A play-scoped time
+reader persists for that active play unless changed through the runtime setter.
+Replaying the same stateful motion does not synthesize a phase-zero position.
+If an active transition later observes a lower literal
+position, it preserves elapsed progress and continues from the new coordinate.
 
 ## Physical positioning
 
@@ -101,9 +107,9 @@ Both return `true` when the current generation accepted the command, including
 when positive Roblox length delays the write, and `false` when no eligible
 generation exists.
 
-Neither operation changes logical phase, replaces a generation, or rewinds the
-state machine. In `sampledPosition` mode, the physical anchor is reset at the
-backend's last accepted sample coordinate.
+Neither operation changes state-machine progress, replaces a generation, or
+rewinds the graph. In `sampledPosition` mode, the physical anchor is reset at
+the request's last accepted time position.
 
 Subscribe to `trackCompleted` through `on`. Completion is committed before
 dispatch and listener iteration is snapshot-safe.

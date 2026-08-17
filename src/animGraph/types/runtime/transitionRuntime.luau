@@ -40,7 +40,7 @@ export type TransitionDebugSnapshot<StateT> = {
 }
 
 export type TransitionRuntime<StateT, ParamT> = {
-	update: (self: TransitionRuntime<StateT, ParamT>, logicalPosition: number) -> (),
+	update: (self: TransitionRuntime<StateT, ParamT>, timePosition: number) -> (),
 	getAlpha: (self: TransitionRuntime<StateT, ParamT>) -> number,
 	isComplete: (self: TransitionRuntime<StateT, ParamT>) -> boolean,
 	getDebugSnapshot: (self: TransitionRuntime<StateT, ParamT>) -> TransitionDebugSnapshot<StateT>,
@@ -52,7 +52,7 @@ export type TransitionRuntimeImpl<StateT, ParamT> = TransitionRuntime<StateT, Pa
 	_toState: StateT,
 	_duration: number,
 	_startPosition: number,
-	_logicalPosition: number,
+	_timePosition: number,
 }
 
 return {}

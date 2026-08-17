@@ -53,12 +53,12 @@ classes: {
 caller: "Caller-owned boundary" {
   direction: right
   scheduler: "Caller scheduler\ncoordinate / cadence"
-  logical-time-reader: "LogicalTimeReader\ncoordinate to position + revision"
+  time-reader: "TimeReader\ncoordinate to position + rate"
   input-seam: "Controller input seam\nupdate(sampleTime) + readers"
   input-seam.class: public-contract
 
   scheduler -> input-seam: "invokes update(sampleTime)" {class: calls}
-  logical-time-reader -> input-seam: "borrowed function" {class: data}
+  time-reader -> input-seam: "atomic sample" {class: data}
 }
 
 controller: "Controller ownership" {
@@ -66,7 +66,7 @@ controller: "Controller ownership" {
   animation-controller: "AnimationController\npreflight - commit - evaluate"
   parameter-store: "ParameterStore\ncommitted values + triggers"
   event-bus: "EventBus\nsnapshot callbacks"
-  layer-runtime: "LayerRuntime instances\nsource rebase + logical phase"
+  layer-runtime: "LayerRuntime instances\nreader precedence + composition"
 }
 
 backend: "Backend ownership" {
@@ -76,9 +76,9 @@ backend: "Backend ownership" {
   roblox-backend: "RobloxAnimatorBackend\npriority + generation owner"
   anim-playback: "Playback generations\nactive - retiring - completed"
   anim-playback.class: backend-private
-  native-rate: "nativeRate\nRoblox advances phase"
+  native-rate: "nativeRate\ncomposed native speed"
   native-rate.class: backend-private
-  sampled-position: "sampledPosition\nanchor-derived TimePosition"
+  sampled-position: "sampledPosition\nliteral-position anchors"
   sampled-position.class: backend-private
   animation: "Roblox Animation\nprivate asset instance"
   animation.class: backend-private
@@ -93,7 +93,7 @@ graph: "Graph evaluation" {
     clip-node: ClipNode
     blend-1d: Blend1DNode
     blend-2d: Blend2DNode
-    state-machine: "StateMachineRuntime\nstates + phase-anchored transitions"
+    state-machine: "StateMachineRuntime\nstates + time-anchored transitions"
   }
   motion-node: "MotionNode contract"
   motion-node.class: public-contract

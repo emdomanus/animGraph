@@ -7,8 +7,8 @@ blend, priority, state-machine, sequence, console, and debug controls.
 rojo serve dev.project.json
 ```
 Connect a blank Roblox Studio place and press Play. The harness passes
-`os.clock()` explicitly and uses anchor-based `LogicalTimeReader` functions,
-then owns this update connection:
+`os.clock()` explicitly and uses anchor-based `TimeReader` functions that return
+position and rate together, then owns this update connection:
 
 ```luau
 local updateConnection = RunService.PreAnimation:Connect(function()

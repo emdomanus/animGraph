@@ -9,7 +9,6 @@ local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 
 export type LayerDefinition<LayerT, LayerBackendT> = Types.LayerDefinition<LayerT, LayerBackendT>
 export type LayerPlayOptions<StateT, LayerBackendT> = Types.LayerPlayOptions<StateT, LayerBackendT>
-export type PreparedLogicalTime = Types.PreparedLogicalTime
 export type LayerDebugSnapshot<LayerT, StateT, LayerBackendT> =
 	Types.LayerDebugSnapshot<LayerT, StateT, LayerBackendT>
 export type LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.LayerRuntime<
@@ -49,7 +48,7 @@ local function assertNonNegative(value: number, name: string): number
 	return value
 end
 
-local function assertReader(reader: DefTypes.LogicalTimeReader?, name: string): ()
+local function assertReader(reader: DefTypes.TimeReader?, name: string): ()
 	if reader ~= nil then
 		assert(typeof(reader) == "function", name .. " must be a function")
 	end
@@ -80,7 +79,7 @@ LayerRuntime.__index = LayerRuntime
 function LayerRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	definition: LayerDefinition<LayerT, LayerBackendT>
 ): LayerRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-	assertReader(definition.logicalTimeReader, "logicalTimeReader")
+	assertReader(definition.timeReader, "timeReader")
 
 	local self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 		setmetatable({}, LayerRuntime) :: any
@@ -98,15 +97,12 @@ function LayerRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		optionNumber(definition.defaultFadeOut, DEFAULT_FADE_OUT),
 		"defaultFadeOut"
 	)
-	self._logicalTimeReader = definition.logicalTimeReader
+	self._timeReader = definition.timeReader
 	self._motion = nil
 	self._state = nil
 	self._fadeTime = self._defaultFadeIn
 	self._overrides = nil
-	self._playLogicalTimeReader = nil
-	self._sourcePosition = nil
-	self._sourceAddressRevision = nil
-	self._logicalPosition = 0
+	self._playTimeReader = nil
 	self._playing = false
 
 	return self
@@ -118,17 +114,6 @@ function LayerRuntime.getId<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	return self._id
 end
 
-function LayerRuntime._resetLogicalTimeBaseline<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	resetPhase: boolean
-): ()
-	self._sourcePosition = nil
-	self._sourceAddressRevision = nil
-	if resetPhase then
-		self._logicalPosition = 0
-	end
-end
-
 function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 	motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
@@ -138,7 +123,7 @@ function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		AnimationPosition.assertValid(options.initialPosition)
 	end
 	if options ~= nil then
-		assertReader(options.logicalTimeReader, "logicalTimeReader")
+		assertReader(options.timeReader, "timeReader")
 	end
 
 	self._motion = motion
@@ -150,8 +135,7 @@ function LayerRuntime.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		"fadeTime"
 	)
 	self._overrides = copyOverrides(options)
-	self._playLogicalTimeReader = if options ~= nil then options.logicalTimeReader else nil
-	self:_resetLogicalTimeBaseline(true)
+	self._playTimeReader = if options ~= nil then options.timeReader else nil
 	self._playing = true
 end
 
@@ -161,62 +145,24 @@ function LayerRuntime.stop<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._motion = nil
 	self._state = nil
 	self._overrides = nil
-	self._playLogicalTimeReader = nil
-	self:_resetLogicalTimeBaseline(true)
+	self._playTimeReader = nil
 	self._playing = false
 end
 
-function LayerRuntime._selectLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function LayerRuntime._selectTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	defaultReader: DefTypes.LogicalTimeReader
-): DefTypes.LogicalTimeReader?
+	defaultReader: DefTypes.TimeReader
+): DefTypes.TimeReader?
 	if not self._playing then
 		return nil
 	end
 
-	return self._playLogicalTimeReader or self._logicalTimeReader or defaultReader
-end
-
-function LayerRuntime._prepareLogicalTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	sample: DefTypes.LogicalTimeSample,
-	rebaseSource: boolean,
-	resetPhase: boolean
-): PreparedLogicalTime
-	local logicalPosition = if resetPhase then 0 else self._logicalPosition
-	local sourcePosition = self._sourcePosition
-	local sourceAddressRevision = self._sourceAddressRevision
-
-	if
-		not rebaseSource
-		and not resetPhase
-		and sourcePosition ~= nil
-		and sourceAddressRevision ~= nil
-		and sample.addressRevision == sourceAddressRevision
-		and sample.position > sourcePosition
-	then
-		logicalPosition = assertFinite(logicalPosition + (sample.position - sourcePosition), "logicalPosition")
-	end
-
-	return {
-		sourcePosition = sample.position,
-		addressRevision = sample.addressRevision,
-		logicalPosition = logicalPosition,
-	}
-end
-
-function LayerRuntime._commitLogicalTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	prepared: PreparedLogicalTime
-): ()
-	self._sourcePosition = prepared.sourcePosition
-	self._sourceAddressRevision = prepared.addressRevision
-	self._logicalPosition = prepared.logicalPosition
+	return self._playTimeReader or self._timeReader or defaultReader
 end
 
 function LayerRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	logicalPosition: number,
+	timeSample: DefTypes.TimeSample,
 	getParameter: (parameter: ParamT) -> any,
 	consumeTrigger: (parameter: ParamT) -> boolean,
 	emitEvent: (event: any) -> ()
@@ -229,7 +175,8 @@ function LayerRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	local context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 		layer = self._id,
 		state = self._state,
-		logicalPosition = logicalPosition,
+		timePosition = timeSample.position,
+		timeRate = timeSample.rate,
 		fadeTime = self._fadeTime,
 		layerWeight = self._weight,
 		layerSpeed = self._speed,
@@ -308,22 +255,20 @@ function LayerRuntime.getLayerBackend<LayerT, StateT, ParamT, ClipT, LayerBacken
 	return self._layerBackend
 end
 
-function LayerRuntime.setLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function LayerRuntime.setTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	reader: DefTypes.LogicalTimeReader?
+	reader: DefTypes.TimeReader?
 ): ()
-	assertReader(reader, "logicalTimeReader")
-	self._logicalTimeReader = reader
-	self:_resetLogicalTimeBaseline(false)
+	assertReader(reader, "timeReader")
+	self._timeReader = reader
 end
 
-function LayerRuntime.setActivePlayLogicalTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+function LayerRuntime.setActivePlayTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self: LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	reader: DefTypes.LogicalTimeReader?
+	reader: DefTypes.TimeReader?
 ): ()
-	assertReader(reader, "logicalTimeReader")
-	self._playLogicalTimeReader = reader
-	self:_resetLogicalTimeBaseline(false)
+	assertReader(reader, "timeReader")
+	self._playTimeReader = reader
 end
 
 function LayerRuntime.getDefaultFadeOut<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
@@ -341,7 +286,6 @@ function LayerRuntime.getDebugSnapshot<LayerT, StateT, ParamT, ClipT, LayerBacke
 		weight = self._weight,
 		speed = self._speed,
 		logicalPriority = self._logicalPriority,
-		logicalPosition = self._logicalPosition,
 		layerBackend = self._layerBackend,
 		isPlaying = self._playing,
 		motion = if self._motion ~= nil then self._motion:getDebugSnapshot() else nil,

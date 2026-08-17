@@ -3,20 +3,30 @@
 ## Unreleased
 
 - Replaced `TimeSource` and scalar `LogicalPositionReader` with explicit
-  `controller:update(sampleTime)` and `LogicalTimeReader(sampleTime) ->
-  { position, addressRevision }`. Equal coordinates re-evaluate, backward
-  controller coordinates reject, and distinct readers are sampled once.
-- Replaced graph `dt`/`ClipRequest.deltaTime` accumulation with layer logical
-  phase rebasing and transition start-position anchors. Stationary/backward
-  reader movement and revision/reader changes hold phase and rebase.
+  `controller:update(sampleTime)` and atomic `TimeReader(sampleTime) ->
+  { position, rate }`. Equal coordinates re-evaluate, backward controller
+  coordinates reject, and distinct readers are sampled once.
+- Replaced graph `dt`/`ClipRequest.deltaTime` accumulation with literal time-
+  position evaluation and transition start-position anchors. Removed address
+  revisions, source baselines, and package-owned discontinuity policy.
 - Added a next-update graph-intent transaction for play/stop, parameters,
   layer properties, and timing-reader changes while retaining synchronous
   active-generation absolute/relative positioning.
 - Added fixed backend `nativeRate` and `sampledPosition` strategies and
-  `backend:apply(sampleTime, requests)`. Native behavior remains optimized;
-  sampled playback uses physical phase anchors and zero-rate Roblox tracks.
+  `backend:apply(sampleTime, requests)`. Native playback composes request speed
+  with reader rate; sampled playback uses reader-position anchors and zero-rate
+  Roblox tracks.
 - Added deterministic sampled-backend coverage and migrated the dev harness,
   public API, diagrams, and VoxelMMO integration boundary to the new contract.
+- Added lifecycle-epoch guards so `clear` or `destroy` from a borrowed reader or
+  graph-event callback invalidates the in-flight controller update instead of
+  allowing stale commands or requests to restore cleared state.
+- Preserved active transition progress across replay and backward time-position
+  samples by shifting the transition start-position anchor.
+- Hardened sampled playback with preflight validation of derived phase
+  arithmetic, guaranteed apply-depth restoration after errors, and
+  lifecycle-safe asset resolution that cannot rematerialize after `clear` or
+  `destroy`.
 - Added backend-neutral `controller:offsetTrackPosition` and backend relative
   positioning with finite signed seconds, active-generation boolean semantics,
   known-length atomic read/modify/write, and generation-local unresolved offset

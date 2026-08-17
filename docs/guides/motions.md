@@ -38,23 +38,26 @@ and can limit influences with `maxInfluences`.
 
 ## Request Contract
 
-The evaluation context carries graph phase while requests carry physical
-intent:
+The evaluation context carries one atomic time sample while requests carry that
+sample plus physical intent:
 
 ```luau
-local graphPhase = context.logicalPosition
+local timePosition = context.timePosition
+local timeRate = context.timeRate
 
 local request = {
-	speed = authoredPhysicalSpeed,
+	speed = authoredPhysicalSpeed * layerSpeed,
+	timePosition = timePosition,
+	timeRate = timeRate,
 	initialPosition = nil,
 	-- identity, layer/state, weight, looping, priority, fade, and restart fields
 }
 ```
 
-The layer runtime composes layer speed only into `request.speed`.
-`ClipRequest` contains no `dt` or logical phase; the backend receives the
-shared sampling coordinate separately. Custom motions should preserve stable
-track keys and keep logical graph phase separate from physical speed.
+The layer runtime composes layer speed into `request.speed`; the backend later
+composes `timeRate` for native playback. `ClipRequest` contains no `dt`.
+Custom motions should preserve stable track keys and propagate `timePosition`
+and `timeRate` without deriving or independently resampling them.
 
 Layer-play `initialPosition` and `forceRestart` overrides remain available until
 the first evaluation that emits at least one request. Every request in that

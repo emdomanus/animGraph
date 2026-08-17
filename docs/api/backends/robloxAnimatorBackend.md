@@ -28,9 +28,14 @@ accepted coordinate. Equal values are valid. The controller passes the same
 coordinate it used for graph evaluation.
 
 The entire request batch is validated before track loading. Duplicate keys,
-invalid positions, non-finite weight/speed/priority/fade, or negative fade
-reject before materialization. Direct backend users receive the same checks as
-controller users.
+invalid positions, non-finite weight/speed/time-position/time-rate/priority/fade,
+or negative fade reject before materialization. Direct backend users receive
+the same checks as controller users.
+
+For unchanged sampled generations, all anchor-derived position and offset
+arithmetic is also preflighted before the backend accepts the batch or mutates
+playback. Finite inputs whose subtraction or multiplication overflows therefore
+reject without advancing accepted state or partially sampling the batch.
 
 ## Position strategies
 
@@ -42,9 +47,16 @@ export type BackendPositionMode =
 
 ### nativeRate
 
-Roblox advances physical phase. A new generation calls `Play` with desired
-signed speed; later speed changes use `AdjustSpeed`. Unchanged requests do not
-replay, seek, rewrite position, or churn native properties.
+Roblox advances physical phase at:
+
+```luau
+finalNativeSpeed = request.speed * request.timeRate
+```
+
+A new generation calls `Play` with that signed speed; later effective-speed
+changes use `AdjustSpeed`. Unchanged effective speed does not replay, seek,
+rewrite position, or churn native properties. Calling `controller:update`
+every frame therefore does not write `TimePosition` every frame.
 
 Initial position is a one-shot generation instruction. If length is unknown,
 it remains pending. Reverse starts hold native rate at zero only when required
@@ -53,11 +65,12 @@ speed after the write.
 
 ### sampledPosition
 
-The backend advances physical phase from anchors while Roblox runs at native
-rate zero:
+The backend advances physical phase from the request's literal time position
+while Roblox runs at native rate zero:
 
 ```luau
-position = positionAnchor + speed * (sampleTime - sampleTimeAnchor)
+physicalPosition = physicalAnchor
+	+ request.speed * (request.timePosition - timeAnchor)
 ```
 
 It wraps looping positions and clamps non-looping positions on every apply.
@@ -65,6 +78,10 @@ Before speed or loop policy changes, it samples with the old values and rebases
 the anchors, then adopts the new request. A positive length is required for the
 physical write, but elapsed anchor-relative phase continues to accrue while
 length is unresolved.
+
+`request.timeRate` does not advance a sampled track; the supplied position does.
+The final composed sign `request.speed * request.timeRate` is used when a
+non-looping boundary needs an intended terminal direction.
 
 Roblox still owns weight interpolation, fades, asset loading, and final pose
 application. `sampledPosition` makes physical position sampling deterministic;
@@ -82,9 +99,14 @@ destroyed targets.
 
 In native mode these commands preserve the existing generation and desired
 native rate. In sampled mode they synchronously write when possible and rebase
-physical phase at the backend's last accepted coordinate. The next apply at
-that same coordinate holds the explicit position; later coordinates advance
-from it.
+physical phase at the request's last accepted time position. The next apply at
+that same position holds the explicit address; later positions advance from it.
+
+A `TimeSample.position` jump is literal in sampled mode. Native mode cannot
+infer whether the same-rate jump should move an already-running Roblox track;
+the caller must use one of these synchronous positioning commands when native
+physical playback needs re-addressing. The backend intentionally has no
+discontinuity detector or reconciliation tolerance.
 
 Pending absolute and relative commands remain generation-local. A later
 absolute command supersedes earlier offsets; later offsets compose from the new
@@ -117,6 +139,11 @@ Explicit stop, request omission, replacement retirement, restart retirement,
 clear, and destroy suppress natural completion. Listener snapshots permit
 re-entrant commands. Non-zero retirement fades keep physical generations until
 `Ended`; zero-fade or inactive retirement cleans immediately.
+
+Apply depth is restored even when asset resolution or Roblox operations throw,
+so a failed apply cannot permanently suppress later completion dispatch. If a
+borrowed `resolveAssetId` callback calls `clear` or `destroy`, a lifecycle epoch
+invalidates that materialization before an `AnimationTrack` is loaded.
 
 Debug track details include `positionMode`, `generation`, `lifecycle`, and
 `physicalPresent` without exposing raw Roblox objects.

@@ -26,9 +26,9 @@ mode after the run.
    are suppressed and old generations clean up.
 8. Re-enter from a completion callback through play/stop/position/clear/destroy
    and confirm one completion, no recursion/errors, and no leaked generations.
-9. Hold action logical time while base advances; confirm action native speed can
-   be `0.5`, base remains `1.0`, and native fade progresses while action logical
-   phase is held.
+9. Hold the action time basis (`position` fixed, `rate = 0`) while base advances;
+   confirm action native speed becomes zero, base remains at its composed speed,
+   and the native fade still progresses.
 10. Compose blend and transition weights without restarting generations.
 11. Pivot live native speed across positive, zero, and negative in the interior
     and at exact boundaries. Confirm one unchanged track/generation, only changed
@@ -44,18 +44,20 @@ This new gate is not yet operator-accepted. Run the harness once with
 `"sampledPosition"`, using the same owned clips and rig.
 
 1. Confirm both strategies receive one controller coordinate per
-   `PreAnimation` update and graph transitions progress identically.
-2. Hold one reader while another advances. Confirm only the advancing layer's
-   logical transition progresses; changing signed physical speed does not
-   rewind or scale either state machine.
+   `PreAnimation` update and graph transitions progress identically when their
+   `TimeSample` values match.
+2. Hold one reader at fixed position and zero rate while another advances.
+   Confirm only the advancing layer's transition progresses and native physical
+   speed on the held layer becomes zero.
 3. Queue a parameter or weight change and evaluate twice at the same coordinate.
    Confirm the second evaluation observes the command while transition progress
    remains unchanged.
-4. In `nativeRate`, confirm unchanged updates do not write `TimePosition` and
-   signed speed continues through `Play`/`AdjustSpeed`.
+4. In `nativeRate`, confirm final speed is request speed multiplied by reader
+   rate, unchanged effective-speed updates do not write `TimePosition` or churn
+   properties, and changes continue through `Play`/`AdjustSpeed`.
 5. In `sampledPosition`, confirm `Play` uses speed zero, `AdjustSpeed` is not
-   used for phase, and each successful update writes the anchor-derived
-   `TimePosition`.
+   used for phase, and each successful update writes the position derived from
+   the reader's literal `position` and the sampled physical anchor.
 6. Pivot sampled speed positive to negative at one coordinate. Confirm position
    is continuous at the pivot, then moves backward from the rebased anchor.
 7. Confirm sampled looping wraps, non-looping outward boundaries complete once,
@@ -67,12 +69,16 @@ This new gate is not yet operator-accepted. Run the harness once with
    Confirm each applies to the active generation immediately, an equal-
    coordinate update holds it, and later coordinates advance from the new
    physical anchor.
-10. Stop/restart a sampled native track externally or through lifecycle
+10. Jump a reader's position without changing its rate. Confirm sampled mode
+    follows the literal jump, while native mode does not infer a physical seek;
+    then issue an explicit position command and confirm the native generation
+    moves without replacement.
+11. Stop/restart a sampled native track externally or through lifecycle
     controls. Confirm native stop does not falsely complete an active sampled
     generation, while explicit retirement still fades and cleans once.
-11. Record Roblox weight/fade behavior in sampled mode. Position determinism
+12. Record Roblox weight/fade behavior in sampled mode. Position determinism
     must not be reported as deterministic fade timing.
-12. Record marker, keyframe-event, root-motion, and pose behavior under sampled
+13. Record marker, keyframe-event, root-motion, and pose behavior under sampled
     `TimePosition` writes. Any difference from native playback is a consumer
     integration constraint, not evidence to silently emulate native signals.
 

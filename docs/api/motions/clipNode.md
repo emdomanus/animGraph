@@ -19,6 +19,7 @@ local clip = AnimGraph.clip("intro", {
 Config supports debug name, track key, weight, speed, looping, logical priority,
 typed layer-backend data, and one canonical `initialPosition`. The constructor
 validates the position before creating the node. Evaluation returns one
-backend-neutral `ClipRequest`. Logical phase remains in
-`MotionEvaluateContext.logicalPosition`; it is not copied into the physical
-request.
+backend-neutral `ClipRequest`. The current `MotionEvaluateContext.timePosition`
+and `timeRate` are copied atomically into that request. Authored clip and layer
+speed remain the pre-clock `request.speed`; the backend performs the final
+strategy-specific composition.

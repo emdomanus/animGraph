@@ -1,7 +1,7 @@
 # Engineering TODOs
 
 - [Absolute-time amendment](/todo/temporalAmendment) — implemented explicit
-  coordinates, logical phase rebasing, command staging, and dual backend
+  coordinates, atomic time bases, command staging, and dual backend
   position strategies.
 - [Backlog](/todo/backlog) — genuinely deferred work not included in the
   completed checkpoint.

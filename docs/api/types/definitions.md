@@ -14,32 +14,30 @@ export type AnimationPosition =
 ```
 
 Seconds are finite and non-negative. Normalized values are finite and within
-`[0, 1]`. This union addresses physical clip position; it is not logical graph
-phase. `offsetTrackPosition` instead accepts finite signed clip seconds.
+`[0, 1]`. This union addresses physical clip position; it is not the graph's
+time-basis position. `offsetTrackPosition` instead accepts finite signed clip
+seconds.
 
-## LogicalTimeSample and LogicalTimeReader
+## TimeSample and TimeReader
 
 ```luau
-export type LogicalTimeSample = {
+export type TimeSample = {
 	position: number,
-	addressRevision: number,
+	rate: number,
 }
 
-export type LogicalTimeReader = (sampleTime: number) -> LogicalTimeSample
+export type TimeReader = (sampleTime: number) -> TimeSample
 ```
 
 The caller passes one finite monotonic coordinate to
 `controller:update(sampleTime)`. Each distinct selected reader receives it once
 and must return finite fields.
 
-`position` is the reader's source address. `addressRevision` changes only for a
-discontinuous re-address, not an ordinary continuous rate change. The layer
-runtime turns reader samples into monotonic logical graph phase:
-
-- first sample: phase remains zero;
-- forward movement with the same revision: add the exact difference;
-- stationary/backward movement: hold phase and rebase the source baseline;
-- revision or reader change: hold phase and rebase.
+`position` is the literal coordinate used by graph, transition, custom-motion,
+and sampled physical evaluation. `rate` is the caller's atomic rate sample; it
+composes optimized native playback and terminal direction. AnimGraph does not
+derive one field from the other or attach discontinuity semantics to either.
+The caller owns continuity mapping and any native physical re-addressing.
 
 ## TrackCompletedEvent
 
