@@ -6,6 +6,7 @@ local AnimationPosition = require(script.Parent.Parent.Parent.utils.animationPos
 local DefTypes = require(script.Parent.Parent.Parent.types.def)
 local MotionNodeTypes = require(script.Parent.Parent.Parent.types.motions.motionNode)
 local RobloxAnimatorBackendTypes = require(script.Parent.Parent.Parent.types.backends.robloxAnimatorBackend)
+local AnimationBackendTypes = require(script.Parent.Parent.Parent.types.backends.animationBackend)
 
 type AnimationPosition = DefTypes.AnimationPosition
 type RobloxLayerBackend = RobloxAnimatorBackendTypes.RobloxLayerBackend
@@ -26,11 +27,13 @@ export type AnimPlaybackConfig<ClipT> = {
 export type AnimPlayback<LayerT, StateT, ClipT> = {
 	start: (
 		self: AnimPlayback<LayerT, StateT, ClipT>,
+		sampleTime: number,
 		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 		robloxPriority: Enum.AnimationPriority
 	) -> boolean,
 	apply: (
 		self: AnimPlayback<LayerT, StateT, ClipT>,
+		sampleTime: number,
 		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 		robloxPriority: Enum.AnimationPriority
 	) -> boolean,
@@ -51,6 +54,7 @@ export type AnimPlayback<LayerT, StateT, ClipT> = {
 	getSpeed: (self: AnimPlayback<LayerT, StateT, ClipT>) -> number,
 	getLogicalPriority: (self: AnimPlayback<LayerT, StateT, ClipT>) -> number,
 	getRobloxPriority: (self: AnimPlayback<LayerT, StateT, ClipT>) -> Enum.AnimationPriority,
+	getPositionMode: (self: AnimPlayback<LayerT, StateT, ClipT>) -> AnimationBackendTypes.BackendPositionMode,
 }
 
 export type AnimPlaybackImpl<LayerT, StateT, ClipT> = AnimPlayback<LayerT, StateT, ClipT> & {
@@ -206,6 +210,7 @@ end
 
 function AnimPlayback.start<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
+	_sampleTime: number,
 	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 	robloxPriority: Enum.AnimationPriority
 ): boolean
@@ -235,6 +240,7 @@ end
 
 function AnimPlayback.apply<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
+	_sampleTime: number,
 	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 	robloxPriority: Enum.AnimationPriority
 ): boolean
@@ -442,6 +448,12 @@ function AnimPlayback.getRobloxPriority<LayerT, StateT, ClipT>(
 	local priority = self._priority
 	assert(priority ~= nil, "playback generation has not started")
 	return priority
+end
+
+function AnimPlayback.getPositionMode<LayerT, StateT, ClipT>(
+	_self: AnimPlaybackImpl<LayerT, StateT, ClipT>
+): AnimationBackendTypes.BackendPositionMode
+	return "nativeRate"
 end
 
 return AnimPlayback

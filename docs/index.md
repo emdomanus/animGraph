@@ -1,68 +1,62 @@
 # AnimGraph
 
-AnimGraph is a caller-scheduled Roblox Luau animation graph. It turns typed
-layers, parameters, motions, and state machines into backend-neutral clip
-requests, then delegates materialization to an injected backend.
+AnimGraph is a caller-scheduled Roblox Luau animation graph. It evaluates typed
+layers, parameters, motions, and state machines at an explicit sampling
+coordinate, produces backend-neutral clip requests, and delegates physical
+playback to an injected backend.
 
-The package owns sampled graph evaluation. It does not own a clock, a
-`RunService` connection, character policy, Tempo, or TemporalService. A caller
-chooses when to invoke `controller:update()` and supplies plain functions that
-convert one shared sampled time into logical positions.
+The package owns no engine clock or RunService connection. Consumers call
+`controller:update(sampleTime)` and provide `LogicalTimeReader` functions that
+map that coordinate to `{ position, addressRevision }`.
 
-## Start Here
+## Start here
 
-- [Guide overview](/guides/)
 - [Getting started](/guides/getting-started)
 - [Architecture and ownership](/architecture)
+- [Absolute-time amendment](/todo/temporalAmendment)
 - [Public API](/api/)
 - [Public type index](/api/types/)
-- [Dev harness](/guides/dev-harness)
+- [Verification](/guides/verification)
 
-## Runtime Model
+## Runtime model
 
 ```text
 caller-owned scheduler
         |
-        | controller:update()
+        | controller:update(sampleTime)
         v
-AnimationController --samples--> TimeSource once
+AnimationController --samples once--> selected LogicalTimeReader functions
         |
-        | selects play > layer > default LogicalPositionReader
-        | preflights every selected sample
+        | active play > layer > controller default
+        | atomic preflight, command commit, logical phase rebasing
         v
-LayerRuntime(s) --evaluate with logical dt--> ClipRequest[]
+LayerRuntime(s) --absolute logicalPosition--> MotionNode graph
         |
-        | backend:apply(requests) on every successful sample
+        | validated ClipRequest[]
         v
-RobloxAnimatorBackend / custom backend
+backend:apply(sampleTime, requests)
+        |
+        +-- nativeRate: Roblox advances physical phase
+        '-- sampledPosition: backend evaluates physical phase anchors
 ```
 
-Each active play has its own logical-position baseline. Its first sample produces
-zero delta. An unchanged position holds graph state, a forward position uses the
-exact finite difference, and a backward or non-finite sample rejects the whole
-update before graph or backend mutation. Request speed remains a separate native
-playback input.
+A new play starts graph phase at zero. Forward source movement with an unchanged
+revision advances by the exact difference. Stationary/backward source movement,
+reader replacement, or an address revision holds graph phase and rebases the
+source baseline. A backward controller coordinate is rejected; an equal
+coordinate is legal and can re-evaluate newly queued commands.
 
-## Package Boundary
+## Boundary
 
 AnimGraph owns:
 
-- typed layers and caller-authored motions;
-- sampled reader selection and per-activation baselines;
-- parameters, triggers, state machines, and graph events;
-- request assembly and duplicate-key validation;
-- backend-neutral logical delta, initial/live absolute and relative positioning,
-  and completion contracts;
-- Roblox track materialization through the shipped backend.
+- typed layers, parameters, triggers, motions, and state machines;
+- selected-reader caching, sample validation, and monotonic logical phase;
+- next-update graph-intent commands;
+- backend-neutral requests, synchronous physical positioning, and completion;
+- Roblox native-rate and sampled-position playback strategies.
 
-AnimGraph does not own character spawning, combat, VFX, network replication,
-timing bindings, clock rate/discontinuity policy, or target rematerialization
-across a game-owned playback handle. Those concerns belong in consumer code.
-
-## Documentation map
-
-- [Verification](/guides/verification) owns the deterministic and static gate inventory.
-- [Studio verification](/guides/studio-verification) owns engine-only checklists
-  and completed operator records, including CP-AG-P.
-- [Temporal amendment](/todo/temporalAmendment) preserves completed design and checkpoint history.
-- [VoxelMMO consumer research](/research/voxelmmo-migration) records integration requirements only.
+Consumers own scheduling, clock selection, discontinuity/revision policy,
+character policy, replication, VFX, content, and any pre-materialization
+position command. Logical graph phase and physical clip phase are deliberately
+separate.

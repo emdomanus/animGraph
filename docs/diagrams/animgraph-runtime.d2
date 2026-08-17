@@ -52,23 +52,21 @@ classes: {
 
 caller: "Caller-owned boundary" {
   direction: right
-  scheduler: "Caller scheduler\nphase / cadence"
-  time-source: "TimeSource\nborrowed sample time"
-  logical-position-reader: "LogicalPositionReader\ntime to logical position"
-  input-seam: "Controller input seam\nupdate call + borrowed functions"
+  scheduler: "Caller scheduler\ncoordinate / cadence"
+  logical-time-reader: "LogicalTimeReader\ncoordinate to position + revision"
+  input-seam: "Controller input seam\nupdate(sampleTime) + readers"
   input-seam.class: public-contract
 
-  scheduler -> input-seam: "invokes update()" {class: calls}
-  time-source -> input-seam: "borrowed function" {class: data}
-  logical-position-reader -> input-seam: "borrowed function" {class: data}
+  scheduler -> input-seam: "invokes update(sampleTime)" {class: calls}
+  logical-time-reader -> input-seam: "borrowed function" {class: data}
 }
 
 controller: "Controller ownership" {
   direction: right
-  animation-controller: "AnimationController\nsample - evaluate - validate"
-  parameter-store: "ParameterStore\nvalues + triggers"
+  animation-controller: "AnimationController\npreflight - commit - evaluate"
+  parameter-store: "ParameterStore\ncommitted values + triggers"
   event-bus: "EventBus\nsnapshot callbacks"
-  layer-runtime: "LayerRuntime instances\nreader baseline + layer composition"
+  layer-runtime: "LayerRuntime instances\nsource rebase + logical phase"
 }
 
 backend: "Backend ownership" {
@@ -76,8 +74,12 @@ backend: "Backend ownership" {
   animation-backend: "AnimationBackend contract"
   animation-backend.class: public-contract
   roblox-backend: "RobloxAnimatorBackend\npriority + generation owner"
-  anim-playback: "AnimPlayback generations\nactive - retiring - completed"
+  anim-playback: "Playback generations\nactive - retiring - completed"
   anim-playback.class: backend-private
+  native-rate: "nativeRate\nRoblox advances phase"
+  native-rate.class: backend-private
+  sampled-position: "sampledPosition\nanchor-derived TimePosition"
+  sampled-position.class: backend-private
   animation: "Roblox Animation\nprivate asset instance"
   animation.class: backend-private
   animation-track: "Roblox AnimationTrack\nprivate physical playback"
@@ -91,7 +93,7 @@ graph: "Graph evaluation" {
     clip-node: ClipNode
     blend-1d: Blend1DNode
     blend-2d: Blend2DNode
-    state-machine: "StateMachineRuntime\nstates + weighted transitions"
+    state-machine: "StateMachineRuntime\nstates + phase-anchored transitions"
   }
   motion-node: "MotionNode contract"
   motion-node.class: public-contract
@@ -110,8 +112,10 @@ controller.parameter-store -> controller.layer-runtime: "parameter reads" {class
 
 controller.layer-runtime -> graph.motion-node: evaluate {class: calls}
 
-graph.clip-requests -> backend.animation-backend: apply {class: data}
+graph.clip-requests -> backend.animation-backend: "apply(sampleTime, requests)" {class: data}
 backend.animation-backend -> backend.roblox-backend: "implemented by" {class: contract}
 backend.roblox-backend -> backend.anim-playback: "owns generations" {class: owns}
+backend.anim-playback -> backend.native-rate: "fixed strategy" {class: data}
+backend.anim-playback -> backend.sampled-position: "fixed strategy" {class: data}
 backend.anim-playback -> backend.animation: creates {class: owns}
 backend.anim-playback -> backend.animation-track: loads {class: owns}

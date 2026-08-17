@@ -18,7 +18,7 @@ export type MotionRequestOverrides<LayerBackendT> = {
 export type MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	layer: LayerT,
 	state: StateT?,
-	dt: number,
+	logicalPosition: number,
 	fadeTime: number,
 	layerWeight: number,
 	layerSpeed: number,
@@ -37,7 +37,6 @@ export type ClipRequest<LayerT, StateT, ClipT, LayerBackendT> = {
 	clip: ClipT,
 	weight: number,
 	speed: number,
-	deltaTime: number,
 	initialPosition: DefTypes.AnimationPosition?,
 	looped: boolean,
 	logicalPriority: number,

@@ -2,117 +2,108 @@
 
 Source: `src/animGraph/controller/animationController/init.luau`
 
-Create a controller with `AnimGraph.new(config)` or
-`AnimGraph.animationController.new(config)`.
-
 ```luau
 local controller = AnimGraph.new({
 	backend = backend,
-	timeSource = timeSource,
-	logicalPositionReader = defaultReader,
+	logicalTimeReader = defaultReader,
 	layers = layerDefinitions,
 })
 ```
 
-`backend`, `timeSource`, and `logicalPositionReader` are required. `layers` is
-optional because layers may be added later.
+`backend` and `logicalTimeReader` are required. `layers` is optional because
+layers may be added later.
 
-## Timing Contract
+## Timing contract
 
-`controller:update()` takes no arguments. It samples `timeSource` exactly once,
-passes that finite time to each distinct selected logical-position reader at
-most once, preflights every returned position, derives per-activation deltas,
-evaluates the graph, and applies the resulting request batch.
+```luau
+controller:update(sampleTime)
+```
 
-Reader precedence is:
+`sampleTime` must be finite and cannot move backward. Equal values are legal.
+Every distinct selected reader is called once with that same coordinate and
+returns:
 
-1. active `LayerPlayOptions.logicalPositionReader`;
-2. `LayerDefinition.logicalPositionReader`;
-3. `AnimationControllerConfig.logicalPositionReader`.
+```luau
+{
+	position = logicalSourcePosition,
+	addressRevision = discontinuityRevision,
+}
+```
 
-Starting any replacement play establishes a fresh baseline. The first sample is
-zero; equal positions remain zero; forward positions use their exact finite
-difference. Non-finite or backward positions reject the whole update without
-changing graph state, backend state, or prior baselines.
+Reader resolution is controller default, then layer override, then active-play
+override. Use `LayerPlayOptions.logicalTimeReader`,
+`LayerDefinition.logicalTimeReader`, or the runtime setters listed below. There
+are no motion-node/subtree readers.
+
+The controller preflights all selected samples before mutation. Invalid sample
+data rejects the complete update and preserves pending commands and prior
+baselines. A new play starts logical phase at zero. Forward same-revision source
+movement advances it; stationary/backward movement and revision/reader changes
+hold and rebase it.
 
 The caller owns scheduling:
 
 ```luau
 local connection = RunService.PreAnimation:Connect(function()
-	controller:update()
+	controller:update(os.clock())
 end)
 ```
 
-## Main Methods
+## Command timing
+
+Graph-intent calls take effect at the next valid update:
+
+- `play` and `stopLayer`;
+- parameter/float/bool/trigger writes;
+- layer weight, speed, logical priority, and backend data;
+- logical-time reader changes.
+
+Getters expose committed state. Calling `update` again at the same coordinate
+applies new commands without advancing logical transition progress.
+
+`setTrackPosition` and `offsetTrackPosition` are synchronous physical-
+generation operations, not queued graph intent. `clear` and `destroy` are also
+immediate lifecycle boundaries.
+
+## Methods
 
 - `addLayer(definition)`
 - `hasLayer(layer)`
 - `play(layer, motion, options?)`
-- `setTrackPosition(trackKey, position) -> boolean`
-- `offsetTrackPosition(trackKey, deltaSeconds) -> boolean`
 - `stopLayer(layer, fadeTime?)`
 - `setLayerWeight` / `getLayerWeight`
 - `setLayerSpeed` / `getLayerSpeed`
 - `setLayerLogicalPriority` / `getLayerLogicalPriority`
 - `setLayerBackend` / `getLayerBackend`
+- `setDefaultLogicalTimeReader(reader)`
+- `setLayerLogicalTimeReader(layer, reader?)`
+- `setActivePlayLogicalTimeReader(layer, reader?)`
 - parameter, float, bool, and trigger accessors
-- `on(eventName, callback)`
-- `update()`
+- `setTrackPosition(trackKey, position) -> boolean`
+- `offsetTrackPosition(trackKey, deltaSeconds) -> boolean`
+- `on(eventName, callback) -> release`
+- `update(sampleTime)`
 - `getDebugSnapshot()`
 - `clear()`
 - `destroy()`
 
 `LayerPlayOptions.initialPosition` and `forceRestart` are one-shot request
-commands consumed after the play first emits requests. `logicalPositionReader`
-persists for the whole active play.
+commands consumed only after the play first emits requests. A play-scoped
+logical-time reader persists for that active play unless changed through the
+runtime setter.
 
-## Atomic Positioning and Completion
+## Physical positioning
 
-`setTrackPosition(trackKey, position)` validates the same `AnimationPosition`
-union used by initial placement, then addresses only the currently live backend
-generation. It returns `true` when the valid command is accepted, including
-when positive track length is still pending, and `false` for an unknown,
-retiring, completed, or destroyed key. It does not change logical reader
-baselines, replay graph history, replace the generation, or emit graph state
-transitions.
+`setTrackPosition(trackKey, position)` validates `AnimationPosition` and
+addresses only the current active backend generation. `offsetTrackPosition`
+accepts finite signed seconds and atomically offsets that same generation.
+Both return `true` when the current generation accepted the command, including
+when positive Roblox length delays the write, and `false` when no eligible
+generation exists.
 
-`offsetTrackPosition(trackKey, deltaSeconds)` is the distinct atomic relative
-operation. `deltaSeconds` must be a finite signed number. It returns `true` when
-the current active generation accepts the command, including while its physical
-write is pending on positive length, and `false` when the controller/backend is
-destroyed or no eligible active generation exists. For known length, the backend
-reads that generation's physical position and writes the wrapped or clamped sum
-within the same call. AnimGraph exposes no public position getter or physical
-playback handle.
+Neither operation changes logical phase, replaces a generation, or rewinds the
+state machine. In `sampledPosition` mode, the physical anchor is reset at the
+backend's last accepted sample coordinate.
 
-While length is unresolved, relative offsets accumulate separately from a
-pending absolute base. A later `setTrackPosition` discards earlier offsets;
-offsets issued after that absolute command compose from its new base. With no
-absolute base, resolution uses the physical position observed when length
-becomes positive. The combined address is consumed by one final position write
-and is not reapplied by ordinary `update()` calls.
-
-For the Roblox backend, non-looping boundary completion is direction-aware. The
-upper boundary completes only with positive desired speed, and the lower boundary
-completes only with negative desired speed. Zero or inward speed keeps the
-generation active. These rules use desired native speed, never relative-offset
-sign or a temporary unresolved reverse hold. Looping absolute and relative
-addressing wraps and does not complete. A live sign pivot changes native speed
-without seeking, replaying, or replacing the generation.
-
-Subscribe with `controller:on("trackCompleted", callback)`. The event is:
-
-```luau
-{
-	name = "trackCompleted",
-	trackKey = trackKey,
-	layer = layer,
-	state = state,
-}
-```
-
-The controller binds the backend completion port exactly once and forwards it
-through its snapshot-dispatched event bus. Destroying the controller releases
-that binding before backend teardown. Natural forward upper-end playback,
-natural reverse lower-end playback, and explicitly addressed outward boundaries
-can produce the event; explicit retirement cannot.
+Subscribe to `trackCompleted` through `on`. Completion is committed before
+dispatch and listener iteration is snapshot-safe.

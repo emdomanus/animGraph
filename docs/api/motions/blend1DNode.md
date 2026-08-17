@@ -17,4 +17,4 @@ local locomotion = AnimGraph.blend1D("speed", {
 ```
 
 The blend parameter selects weights; it is not layer playback speed. Every
-child receives the same sampled motion context and logical delta.
+child receives the same absolute logical-position context.

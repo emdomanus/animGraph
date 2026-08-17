@@ -1,30 +1,24 @@
 # animGraph
 
-animGraph is a Roblox/pesde animation controller package built around typed
-logical layers, motion nodes, and backend-neutral clip requests.
+animGraph is a typed Roblox/Luau animation graph with explicit-time evaluation,
+authored layers and motions, and backend-owned physical playback.
 
 Docs: https://emdomanus.github.io/animGraph/
 
-The current implementation provides the authored controller slice:
+The package provides:
 
-- typed `AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>`;
-- logical layer playback with layer weight, speed, priority, and fade defaults;
-- `ClipNode`, `Blend1DNode`, and `Blend2DNode` motion playback;
-- authored state machines with trigger/parameter transition conditions;
-- controller events for state enter/exit, transition start/end, and backend-neutral track completion;
-- controller parameters (`float`, `bool`, trigger, and raw values);
-- coherent once-per-update sampling with controller, layer, and active-play logical readers;
-- validated one-shot initial positions in seconds or normalized form;
-- a Roblox `Animator` backend that drives `AnimationTrack` weight, speed, and
-  priority without redundant unchanged operations;
-- atomic absolute and relative backend-neutral track positioning by `trackKey`;
-- generation-safe fade retirement, physical cleanup, and completed tombstones;
-- debug snapshots for controller, layers, parameters, and active, retiring, or completed backend tracks.
+- `AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>`;
+- controller, layer, and active-play `LogicalTimeReader` scopes;
+- monotonic logical graph phase through source/revision rebasing;
+- queued next-update graph intent and same-coordinate re-evaluation;
+- clip, Blend1D, Blend2D, and authored state-machine motion nodes;
+- backend-neutral requests, absolute/relative physical positioning, completion,
+  and debug contracts;
+- a Roblox backend with fixed `nativeRate` and `sampledPosition` strategies;
+- generation-safe fade retirement, cleanup, and completion tombstones.
 
-The public API intentionally talks in layers, states, parameters, clips, motion
-nodes, and backends instead of raw Roblox `AnimationTrack`s. That keeps the API
-usable with the current Roblox `Animator` backend while leaving room for a
-future Crunchyroll/custom pose-solver backend.
+The caller owns scheduling and passes a finite monotonic coordinate to every
+update. animGraph owns no clock or RunService connection.
 
 ## Install
 
@@ -32,7 +26,7 @@ future Crunchyroll/custom pose-solver backend.
 pesde install
 ```
 
-The package entrypoint is `src/init.luau`, which re-exports `src/animGraph`.
+The package entry point is `src/init.luau`.
 
 ## Example
 
@@ -43,47 +37,36 @@ local RunService = game:GetService("RunService")
 local AnimGraph = require(ReplicatedStorage.packages.animGraph)
 
 type Layer = "base" | "action"
-type State = "idle" | "attack"
+type State = "locomotion" | "empty" | "attack"
 type Param = "speed" | "attack"
-type Clip = string
+type Clip = "idle" | "walk" | "slash"
 type LayerBackend = AnimGraph.RobloxLayerBackend
 
 local backend = AnimGraph.robloxAnimatorBackend.new({
 	animator = animator,
+	positionMode = "nativeRate",
 	resolveAssetId = function(clip: Clip): number
 		return animationIds[clip]
 	end,
 })
 
+local worldReader: AnimGraph.LogicalTimeReader = function(sampleTime: number): AnimGraph.LogicalTimeSample
+	return {
+		position = sampleTime,
+		addressRevision = 0,
+	}
+end
+
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
-	timeSource = os.clock,
-	logicalPositionReader = function(time: number): number
-		return time
-	end,
+	logicalTimeReader = worldReader,
 	layers = {
-		{
-			id = "base",
-			weight = 1,
-			logicalPriority = 0,
-			layerBackend = {
-				robloxPriority = Enum.AnimationPriority.Movement,
-			},
-			defaultFadeIn = 0.15,
-			defaultFadeOut = 0.15,
-		},
-		{
-			id = "action",
-			weight = 1,
-			logicalPriority = 100,
-			defaultFadeIn = 0.05,
-			defaultFadeOut = 0.12,
-		},
+		{ id = "base", logicalPriority = 0 },
+		{ id = "action", logicalPriority = 100 },
 	},
 })
 
 controller:play("base", AnimGraph.blend1D("speed", {
-	name = "Locomotion",
 	samples = {
 		{ threshold = 0, motion = AnimGraph.clip("idle") },
 		{ threshold = 8, motion = AnimGraph.clip("walk") },
@@ -97,192 +80,148 @@ controller:play("action", AnimGraph.stateMachine({
 	initialState = "empty",
 	states = {
 		{ id = "empty" },
-		{ id = "attack", motion = AnimGraph.clip("slash_01") },
+		{ id = "attack", motion = AnimGraph.clip("slash") },
 	},
 	transitions = {
 		{
-			name = "attack",
+			from = "empty",
 			to = "attack",
 			conditions = {
 				{ parameter = "attack", op = "trigger" },
 			},
 		},
 	},
-}), { state = "empty" })
+}))
 
 controller:setFloat("speed", 4)
 controller:setTrigger("attack")
 
-local releaseCompletion = controller:on("trackCompleted", function(event)
-	if event.name ~= "trackCompleted" then
-		return
-	end
-
-	print("completed", event.trackKey, event.layer, event.state)
-end)
-
 local updateConnection = RunService.PreAnimation:Connect(function()
-	controller:update()
+	controller:update(os.clock())
 end)
 
 -- later
 updateConnection:Disconnect()
-releaseCompletion()
 controller:destroy()
 ```
 
-You can also drive updates from another caller-owned deterministic cadence:
+`play` and parameter writes take effect at the next valid update.
+
+## Time model
 
 ```luau
-controller:update()
+export type LogicalTimeSample = {
+	position: number,
+	addressRevision: number,
+}
+
+export type LogicalTimeReader = (sampleTime: number) -> LogicalTimeSample
 ```
 
-## Concepts
+Reader precedence is controller default, then layer override, then active-play
+override. Each distinct selected reader is sampled once per update.
 
-- A layer is a caller-owned logical animation lane, such as `"base"`,
-  `"upperBody"`, `"action"`, or a typed enum.
-- A state is an authored/debug identity used by the package's authored
-  state-machine and transition runtime.
-- A clip is the caller's animation identity. It can be a string key, numeric
-  asset id, enum value, or another stable key.
-- A motion node evaluates to one or more clip requests. The package ships
-  `ClipNode`, `Blend1DNode`, `Blend2DNode`, and `StateMachineRuntime`.
-- A state machine owns authored states and transitions. Conditions can read
-  normal parameters or consume trigger parameters.
-- A backend receives clip requests and applies them to an animation runtime.
-  The shipped backend uses Roblox `Animator` and `AnimationTrack`.
-- `trackKey` is the backend-neutral identity used for absolute/relative live
-  positioning and completion; AnimGraph does not expose a playback handle,
-  position getter, or raw Roblox track.
-- Each update samples one finite `TimeSource` time and passes it to each distinct
-  selected `LogicalPositionReader` at most once. Play readers replace layer
-  readers, which replace the controller default.
-- Reader-derived logical delta and request speed remain independent inputs.
-- Logical priorities are numeric and backend-neutral. The Roblox backend maps
-  them onto Roblox's limited `Enum.AnimationPriority` tiers unless a request
-  carries Roblox layer backend data with an explicit `robloxPriority`.
-- `LayerBackendT` is the typed backend-specific data carried by a layer and its
-  requests. Roblox uses `AnimGraph.RobloxLayerBackend`; custom backends can define
-  their own layer extension type.
+A new play begins logical graph phase at zero. Forward source movement with an
+unchanged revision advances phase by the exact difference. Stationary/backward
+movement, a reader change, or a revision change holds phase and rebases the
+source baseline. `addressRevision` is for discontinuous re-addressing, not
+ordinary continuous rate changes.
 
-## Roblox Backend
+`controller:update(sampleTime)` accepts finite nondecreasing coordinates. Equal
+coordinates are legal; they allow newly queued commands to re-evaluate without
+advancing transitions. Backward coordinates and invalid reader samples reject
+the complete update before package mutation.
 
-The Roblox backend applies each evaluated clip request by setting:
+State-machine transitions store a logical start-position anchor and derive
+progress from the current absolute phase. Motion requests contain no graph
+`dt`.
 
-- `AnimationTrack.Priority`;
-- `AnimationTrack.Looped`;
-- `AnimationTrack:AdjustWeight(weight, fadeTime)` only when the effective target changes;
-- `AnimationTrack:AdjustSpeed(speed)` only when the effective speed changes;
-- `AnimationTrack.TimePosition` once per materialized generation when an
-  `initialPosition` resolves against a positive length.
+## Graph intent and physical commands
 
-Repeated application of the same live request does not replay, reposition, or
-restart an unchanged fade. `setTrackPosition` addresses the same live generation
-forward or backward and permanently supersedes a pending initial position.
-`offsetTrackPosition` accepts finite signed seconds and atomically applies them
-to that generation's physical position. It returns `true` for an accepted active
-generation even when zero length delays the write, and `false` when no eligible
-active generation exists or the controller/backend is destroyed.
+Play, stop, parameters/triggers, layer weight/speed/priority/backend data, and
+logical-reader changes are queued for the next valid update. Getters expose
+committed state.
 
-Pending relative offsets remain separate from a pending absolute base. An
-absolute set discards older offsets; later offsets compose from the new base. If
-there is no absolute base, resolution observes physical position when length
-becomes positive. The combined address wraps/clamps and writes once; ordinary
-request application does not consume it twice. No position getter or Roblox
-track is exposed.
+These remain synchronous:
 
-Non-looping positions clamp to `[0, Length]`, but a boundary completes only when
-the desired signed speed points outward: positive at the upper boundary or
-negative at the lower boundary. Inward or zero-speed boundary placement remains
-active, and looping addressing wraps without completion. Relative terminal
-classification uses desired speed rather than offset sign.
+- `setTrackPosition(trackKey, AnimationPosition) -> boolean`;
+- `offsetTrackPosition(trackKey, deltaSeconds) -> boolean`;
+- `clear()` and `destroy()` lifecycle boundaries.
 
-A known-length reverse start calls `Play` with the desired negative speed before
-writing the exact upper position. If length is still zero, it calls `Play` at
-speed `0`, retains the negative request, writes the requested upper position
-once when length becomes positive, then applies the retained speed without
-replaying or replacing the generation. Later live sign pivots use only
-`AdjustSpeed`; an
-outward pivot at an exact non-looping boundary completes once.
+The positioning boolean means the current active physical generation accepted
+the command. Physical positioning never rewinds logical state-machine phase.
 
-Natural forward upper-end completion, natural reverse lower-end completion, and
-accepted outward boundary completion are forwarded as `trackCompleted` only
-after state commit. Explicit stop, disappearance, replacement, restart, clear,
-and destroy suppress completion. Non-zero retirement fades keep old physical
-generations until `Ended`; completed tombstones retain no raw Roblox objects and
-prevent unchanged desired requests from replaying.
+## Backend position modes
 
-It maps logical priority bands like this by default:
-
-```text
-200+    -> Action4
-100-199 -> Action3
-50-99   -> Action2
-10-49   -> Action
-0-9     -> Movement
+```luau
+export type BackendPositionMode = "nativeRate" | "sampledPosition"
 ```
 
-Use explicit `layerBackend = { robloxPriority = ... }` on a layer or play
-request when you need a specific Roblox priority tier.
+The mode is selected once when constructing a backend and is exposed through
+its capabilities. It is not a layer, motion, or authored-content option.
 
-## API
+- `nativeRate` lets Roblox advance physical playback through `Play` and
+  `AdjustSpeed`. Unchanged requests do not seek or churn native properties.
+- `sampledPosition` runs tracks at native speed zero and evaluates physical
+  phase from `positionAnchor + speed * (sampleTime - sampleTimeAnchor)` on each
+  apply. Speed/loop changes rebase before adopting the new values.
 
-- `AnimGraph.new(config) -> AnimationController`
-- `AnimGraph.clip(clip, config?) -> ClipNode`
-- `AnimGraph.blend1D(parameter, config) -> Blend1DNode`
-- `AnimGraph.blend2D(parameterX, parameterY, config) -> Blend2DNode`
-- `AnimGraph.stateMachine(config) -> StateMachineRuntime`
-- `AnimGraph.animationController.new(config)`
-- `AnimGraph.clipNode.new(clip, config?)`
-- `AnimGraph.blend1DNode.new(parameter, config)`
-- `AnimGraph.blend2DNode.new(parameterX, parameterY, config)`
-- `AnimGraph.stateMachineRuntime.new(config)`
+Both modes receive `backend:apply(sampleTime, requests)` and share generation,
+fade, priority, positioning, completion, tombstone, and teardown behavior.
+
+Logical graph phase and physical clip phase are separate. Signed physical speed
+does not scale or reverse state-machine progress.
+
+## Physical position and completion
+
+`AnimationPosition` is either finite non-negative seconds or normalized
+`[0, 1]`. Non-looping addresses clamp; looping addresses wrap. A non-looping
+boundary completes only when desired signed speed points outward: positive at
+the upper boundary or negative at the lower boundary. Zero/inward speed remains
+active.
+
+Unknown Roblox length delays physical writes. Position and ordered offsets stay
+generation-local and resolve once length becomes positive. In sampled mode,
+anchor-relative phase continues to accrue while length is unresolved.
+
+The Roblox backend owns active, retiring, and completed generations. Completed
+tombstones prevent unchanged desired requests from replaying. Explicit stop,
+omission, replacement retirement, clear, and destroy do not emit natural
+completion.
+
+`sampledPosition` makes coordinate-to-position evaluation deterministic, but
+Roblox still owns asset loading, weight fades, pose application, markers, and
+root motion. Verify those behaviors in Studio before choosing sampled playback
+for dependent content.
+
+## Main API
+
+Constructors:
+
+- `AnimGraph.new(config)`
+- `AnimGraph.clip(clip, config?)`
+- `AnimGraph.blend1D(parameter, config)`
+- `AnimGraph.blend2D(parameterX, parameterY, config)`
+- `AnimGraph.stateMachine(config)`
 - `AnimGraph.robloxAnimatorBackend.new(config)`
 - `AnimGraph.stackModifier.new(config?)`
 
-Controller methods:
+Controller operations:
 
-- `controller:addLayer(definition)`
-- `controller:hasLayer(layer)`
-- `controller:play(layer, motionNode, options?)`
-- `controller:setTrackPosition(trackKey, position) -> boolean`
-- `controller:offsetTrackPosition(trackKey, deltaSeconds) -> boolean`
-- `controller:stopLayer(layer, fadeTime?)`
-- `controller:setLayerWeight(layer, weight)`
-- `controller:getLayerWeight(layer) -> number?`
-- `controller:setLayerSpeed(layer, speed)`
-- `controller:getLayerSpeed(layer) -> number?`
-- `controller:setLayerLogicalPriority(layer, logicalPriority)`
-- `controller:getLayerLogicalPriority(layer) -> number?`
-- `controller:setLayerBackend(layer, layerBackend?)`
-- `controller:getLayerBackend(layer) -> layerBackend?`
-- `controller:setParameter(parameter, value)`
-- `controller:getParameter(parameter) -> value?`
-- `controller:setFloat(parameter, value)`
-- `controller:getFloat(parameter, fallback?) -> number`
-- `controller:setBool(parameter, value)`
-- `controller:getBool(parameter, fallback?) -> boolean`
-- `controller:setTrigger(parameter)`
-- `controller:consumeTrigger(parameter) -> boolean`
-- `controller:on(eventName, callback) -> release`
-- `controller:update()`
-- `controller:getDebugSnapshot()`
-- `controller:clear()`
-- `controller:destroy()`
+- layers: `addLayer`, `hasLayer`, `play`, `stopLayer`;
+- composition: layer weight/speed/logical-priority/backend setters and getters;
+- readers: `setDefaultLogicalTimeReader`, `setLayerLogicalTimeReader`,
+  `setActivePlayLogicalTimeReader`;
+- parameters: raw, float, bool, trigger accessors;
+- physical position: `setTrackPosition`, `offsetTrackPosition`;
+- lifecycle/events: `on`, `update(sampleTime)`, `getDebugSnapshot`, `clear`,
+  `destroy`.
 
-## Next Slices
-
-Further design history and consumer integration are tracked in the checkpointed
-[temporal amendment](docs/todo/temporalAmendment.md) and
-[backlog](docs/todo/backlog.md). CP-TA3 is operator-reviewed and complete;
-package publishing, version decisions, and VoxelMMO migration remain separate
-work.
+See the [API reference](docs/api/index.md),
+[architecture](docs/architecture.md), and
+[absolute-time amendment](docs/todo/temporalAmendment.md).
 
 ## Development
-
-Run the deterministic, formatting, lint, Luau-analysis, and documentation
-checks from the repository root. The complete gate inventory and the 72-test
-baseline are in the [verification guide](docs/guides/verification.md):
 
 ```sh
 lune run tests/lune/run.luau
@@ -291,31 +230,13 @@ selene src dev tests
 npm run docs:build
 ```
 
-For Roblox-aware Luau analysis and Rojo require graph validation:
+For Roblox-aware analysis and the require graph:
 
 ```powershell
 .\scripts\check-luau.ps1
 ```
 
-The script regenerates the dev sourcemap, downloads the Roblox `luau-lsp`
-definitions into a temp cache when needed, runs `luau-lsp analyze`, and runs
-`luau-lsp require-graph` against `src` and `dev`.
-
-For the interactive dev harness:
-
-```sh
-rojo serve dev.project.json
-```
-
-Open a blank place, connect Rojo, and press Play. The harness mounts animGraph
-under `ReplicatedStorage.packages`, creates an R6 dummy in `Workspace`, points the
-camera at it, and provides UI buttons for layer playback, layer weights, action
-priority mapping, authored state-machine triggers, blend parameters, and debug
-snapshots. The control panel groups related controls into sections, keeps the
-console collapsed by default, and includes scripted gameplay-like sequences for
-testing chained locomotion/action operations. Its Temporal Lifecycle section
-adds independent held/advancing readers, live forward/back positioning, exact
-forward terminal and natural completion, looping, same-key replacement,
-reappearance during fade, and cleanup visibility. The direction-aware reverse
-controls, relative-offset controls, and completed CP-AG-R and CP-AG-P operator
-acceptance are recorded in the Studio verification checklist.
+Run `rojo serve dev.project.json` for the Studio harness. Change its typed
+`BACKEND_POSITION_MODE` constant to exercise either backend strategy. The
+[Studio checklist](docs/guides/studio-verification.md) records the remaining
+engine-only sampled-position gate.

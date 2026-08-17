@@ -7,7 +7,8 @@ Create with `AnimGraph.stateMachine(config)` or
 node with authored states, ordered transitions, conditions, event emission, and
 debug state.
 
-Transition progress consumes the selected layer activation's reader-derived
-`MotionEvaluateContext.dt`. A held reader holds progress; native request speed
-does not scale it. Create separate runtime instances for independent live graph
-state.
+Transition progress derives from `MotionEvaluateContext.logicalPosition`. Each
+transition stores its start-position anchor and computes elapsed from the
+current absolute graph phase. Held or equal-coordinate evaluation holds
+progress; native request speed does not scale or rewind it. Create separate
+runtime instances for independent live graph state.

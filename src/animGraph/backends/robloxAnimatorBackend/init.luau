@@ -3,6 +3,7 @@
 --!native
 
 local AnimPlayback = require(script.animPlayback)
+local SampledAnimPlayback = require(script.sampledAnimPlayback)
 local AnimationPosition = require(script.Parent.Parent.utils.animationPosition)
 local RequestValidation = require(script.Parent.Parent.utils.requestValidation)
 local BackendTypes = require(script.Parent.Parent.types.backends.animationBackend)
@@ -36,11 +37,17 @@ local DEFAULT_PRIORITY_BANDS: { LogicalPriorityBand } = {
 	{ min = 0, priority = Enum.AnimationPriority.Movement },
 }
 
-local CAPABILITIES: BackendTypes.BackendCapabilities = {
-	unlimitedPriority = false,
-	perJointFallback = "priorityTier",
-	customMasks = false,
-}
+local NATIVE_RATE: BackendTypes.BackendPositionMode = "nativeRate"
+local SAMPLED_POSITION: BackendTypes.BackendPositionMode = "sampledPosition"
+
+local function makeCapabilities(positionMode: BackendTypes.BackendPositionMode): BackendTypes.BackendCapabilities
+	return {
+		positionMode = positionMode,
+		unlimitedPriority = false,
+		perJointFallback = "priorityTier",
+		customMasks = false,
+	}
+end
 
 local function optionNumber(value: number?, fallback: number): number
 	return if value ~= nil then value else fallback
@@ -55,6 +62,12 @@ end
 local function assertPositiveAssetId(assetId: AssetId): AssetId
 	assert(assetId > 0, "resolved animation asset id must be a positive number")
 	return assetId
+end
+
+local function assertFiniteSampleTime(sampleTime: number): number
+	assert(typeof(sampleTime) == "number", "sampleTime must be a number")
+	assert(sampleTime == sampleTime and sampleTime > -math.huge and sampleTime < math.huge, "sampleTime must be finite")
+	return sampleTime
 end
 
 local function copyPriorityBands(priorityBands: { LogicalPriorityBand }?): { LogicalPriorityBand }
@@ -91,6 +104,11 @@ function RobloxAnimatorBackend.new<LayerT, StateT, ClipT>(
 	self._defaultFadeOut = assertNonNegative(optionNumber(config.defaultFadeOut, DEFAULT_FADE_OUT), "defaultFadeOut")
 	self._defaultPriority = config.defaultPriority or DEFAULT_PRIORITY
 	self._priorityBands = copyPriorityBands(config.priorityBands)
+	local positionMode = config.positionMode or NATIVE_RATE
+	assert(positionMode == NATIVE_RATE or positionMode == SAMPLED_POSITION, "invalid backend positionMode")
+	self._positionMode = positionMode
+	self._capabilities = makeCapabilities(positionMode)
+	self._lastSampleTime = nil
 	self._active = {}
 	self._physical = {}
 	self._retiring = {}
@@ -126,13 +144,14 @@ end
 
 function RobloxAnimatorBackend._materialize<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	sampleTime: number,
 	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 	robloxPriority: Enum.AnimationPriority
 ): Playback<LayerT, StateT, ClipT>
 	local assetId = assertPositiveAssetId(self._resolveAssetId(request.clip))
 	self._nextGeneration += 1
 	local generation = self._nextGeneration
-	local playback: Playback<LayerT, StateT, ClipT> = AnimPlayback.new({
+	local playbackConfig: AnimPlayback.AnimPlaybackConfig<ClipT> = {
 		trackKey = request.trackKey,
 		clip = request.clip,
 		assetId = assetId,
@@ -144,11 +163,17 @@ function RobloxAnimatorBackend._materialize<LayerT, StateT, ClipT>(
 		onEnded = function(endedGeneration)
 			self:_handleEnded(endedGeneration)
 		end,
-	})
+	}
+	local playback: Playback<LayerT, StateT, ClipT>
+	if self._positionMode == SAMPLED_POSITION then
+		playback = SampledAnimPlayback.new(playbackConfig)
+	else
+		playback = AnimPlayback.new(playbackConfig)
+	end
 
 	self._active[request.trackKey] = playback
 	self._physical[generation] = playback
-	local completed = playback:start(request, robloxPriority)
+	local completed = playback:start(sampleTime, request, robloxPriority)
 	if completed then
 		self:_complete(playback)
 	end
@@ -215,6 +240,9 @@ function RobloxAnimatorBackend._complete<LayerT, StateT, ClipT>(
 		generation = generation,
 	}
 	self._pendingCompletions[#self._pendingCompletions + 1] = event
+	if playback:getPositionMode() == SAMPLED_POSITION then
+		self:_cleanupPhysical(generation)
+	end
 	self:_flushCompletions()
 end
 
@@ -223,7 +251,7 @@ function RobloxAnimatorBackend._handleStopped<LayerT, StateT, ClipT>(
 	generation: number
 ): ()
 	local playback = self._physical[generation] :: Playback<LayerT, StateT, ClipT>?
-	if playback == nil or playback:isLooped() then
+	if playback == nil or playback:isLooped() or playback:getPositionMode() == SAMPLED_POSITION then
 		return
 	end
 
@@ -247,6 +275,9 @@ function RobloxAnimatorBackend._handleEnded<LayerT, StateT, ClipT>(
 
 	local trackKey = playback:getTrackKey()
 	if self._active[trackKey] == playback then
+		if playback:getPositionMode() == SAMPLED_POSITION then
+			return
+		end
 		if playback:isLooped() then
 			self._active[trackKey] = nil
 		else
@@ -291,12 +322,17 @@ end
 
 function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	sampleTime: number,
 	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend> }
 ): ()
+	assertFiniteSampleTime(sampleTime)
+	local lastSampleTime = self._lastSampleTime
+	assert(lastSampleTime == nil or sampleTime >= lastSampleTime, "sampleTime moved backward")
 	RequestValidation.validate(requests)
 	if self._destroyed then
 		return
 	end
+	self._lastSampleTime = sampleTime
 
 	self._applyDepth += 1
 	local touched: { [string]: true } = {}
@@ -325,9 +361,9 @@ function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 
 		local robloxPriority = self:_mapPriority(request)
 		if playback == nil then
-			self:_materialize(request, robloxPriority)
+			self:_materialize(sampleTime, request, robloxPriority)
 		else
-			local completed = playback:apply(request, robloxPriority)
+			local completed = playback:apply(sampleTime, request, robloxPriority)
 			if completed then
 				self:_complete(playback)
 			end
@@ -492,8 +528,7 @@ end
 function RobloxAnimatorBackend.getCapabilities<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
 ): BackendTypes.BackendCapabilities
-	local _self = self
-	return CAPABILITIES
+	return self._capabilities
 end
 
 local function appendPlaybackDebug<LayerT, StateT, ClipT>(
@@ -512,6 +547,7 @@ local function appendPlaybackDebug<LayerT, StateT, ClipT>(
 		isPlaying = playback:isPlaying(),
 		details = {
 			robloxPriority = playback:getRobloxPriority(),
+			positionMode = playback:getPositionMode(),
 			generation = playback:getGeneration(),
 			lifecycle = lifecycle,
 			physicalPresent = true,
@@ -540,6 +576,7 @@ function RobloxAnimatorBackend.getDebugSnapshot<LayerT, StateT, ClipT>(
 			logicalPriority = 0,
 			isPlaying = false,
 			details = {
+				positionMode = self._positionMode,
 				generation = tombstone.generation,
 				lifecycle = "completed",
 				physicalPresent = self._physical[tombstone.generation] ~= nil,
@@ -555,7 +592,7 @@ function RobloxAnimatorBackend.getDebugSnapshot<LayerT, StateT, ClipT>(
 
 	return {
 		name = "RobloxAnimatorBackend",
-		capabilities = CAPABILITIES,
+		capabilities = self._capabilities,
 		tracks = tracks,
 		warnings = self._warnings,
 	}

@@ -27,7 +27,6 @@ local function newRequest(overrides: any?): any
 		clip = "idle",
 		weight = 1,
 		speed = 1,
-		deltaTime = 0.25,
 		initialPosition = nil,
 		looped = false,
 		logicalPriority = 0,
@@ -70,7 +69,7 @@ local ok, result = pcall(function(): number
 	test("duplicate keys reject the whole direct batch before materialization", function(): ()
 		local backend, animator = newBackend()
 		expectError(function()
-			backend:apply({
+			backend:apply(0, {
 				newRequest(),
 				newRequest({ clip = "wave" }),
 			})
@@ -95,7 +94,7 @@ local ok, result = pcall(function(): number
 		for _, position in invalidPositions do
 			local backend, animator = newBackend()
 			expectError(function()
-				backend:apply({
+				backend:apply(0, {
 					newRequest({ trackKey = "valid", initialPosition = { kind = "seconds", value = 1 } }),
 					newRequest({ trackKey = "invalid", initialPosition = position }),
 				})
@@ -107,15 +106,15 @@ local ok, result = pcall(function(): number
 	test("seconds and normalized initial positions resolve once", function(): ()
 		local secondsBackend, secondsAnimator = newBackend(10)
 		local secondsRequest = newRequest({ initialPosition = { kind = "seconds", value = 3 } })
-		secondsBackend:apply({ secondsRequest })
-		secondsBackend:apply({ secondsRequest })
+		secondsBackend:apply(0, { secondsRequest })
+		secondsBackend:apply(0, { secondsRequest })
 		local secondsTrack = secondsAnimator.tracks[1]
 		assert(#secondsTrack.calls.positionWrites == 1 and secondsTrack.calls.positionWrites[1] == 3, "seconds position was not one-shot")
 
 		local normalizedBackend, normalizedAnimator = newBackend(10)
 		local normalizedRequest = newRequest({ initialPosition = { kind = "normalized", value = 0.25 } })
-		normalizedBackend:apply({ normalizedRequest })
-		normalizedBackend:apply({ normalizedRequest })
+		normalizedBackend:apply(0, { normalizedRequest })
+		normalizedBackend:apply(0, { normalizedRequest })
 		local normalizedTrack = normalizedAnimator.tracks[1]
 		assert(
 			#normalizedTrack.calls.positionWrites == 1 and normalizedTrack.calls.positionWrites[1] == 2.5,
@@ -126,25 +125,25 @@ local ok, result = pcall(function(): number
 	test("pending initial position resolves once after length becomes positive", function(): ()
 		local backend, animator = newBackend(0)
 		local request = newRequest({ initialPosition = { kind = "normalized", value = 0.25 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		assert(track.calls.play == 1 and #track.calls.positionWrites == 0, "zero length applied the pending position")
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(track.calls.play == 1 and #track.calls.positionWrites == 0, "pending poll mutated unchanged playback")
 		track:setLength(8)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 2, "pending position did not resolve exactly once")
 	end)
 
 	test("pending terminal position latches completion when positive length resolves", function(): ()
 		local backend, animator = newBackend(0)
 		local request = newRequest({ initialPosition = { kind = "normalized", value = 1 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:setLength(8)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 8, "pending terminal position was wrong")
 		assert(track.calls.play == 1, "resolved terminal materialization replayed")
 		assert(backend:getDebugSnapshot().tracks[1].isPlaying == false, "resolved terminal position did not latch completion")
@@ -153,10 +152,10 @@ local ok, result = pcall(function(): number
 	test("a later desired initial position cannot snap a live generation", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ initialPosition = { kind = "seconds", value = 2 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		request.initialPosition = { kind = "seconds", value = 7 }
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 2, "live generation snapped back")
 	end)
@@ -169,8 +168,8 @@ local ok, result = pcall(function(): number
 		} do
 			local backend, animator = newBackend(10)
 			local request = newRequest({ initialPosition = position })
-			backend:apply({ request })
-			backend:apply({ request })
+			backend:apply(0, { request })
+			backend:apply(0, { request })
 			local track = animator.tracks[1]
 			assert(track.calls.positionWrites[1] == 10, "terminal position did not clamp to length")
 			assert(track.calls.play == 1, "completed materialization replayed")
@@ -186,8 +185,8 @@ local ok, result = pcall(function(): number
 		} do
 			local backend, animator = newBackend(10)
 			local request = newRequest({ looped = true, initialPosition = case.position })
-			backend:apply({ request })
-			backend:apply({ request })
+			backend:apply(0, { request })
+			backend:apply(0, { request })
 			local track = animator.tracks[1]
 			assert(track.calls.positionWrites[1] == case.expected, "looping position boundary was wrong")
 			assert(track.calls.play == 1, "looping boundary restarted playback")
@@ -213,7 +212,7 @@ local ok, result = pcall(function(): number
 				committed = #snapshot.tracks == 1 and snapshot.tracks[1].details.lifecycle == "completed"
 			end)
 			local request = newRequest({ initialPosition = case.position, speed = case.speed })
-			backend:apply({ request })
+			backend:apply(0, { request })
 
 			local track = animator.tracks[1]
 			local snapshot = backend:getDebugSnapshot()
@@ -231,7 +230,7 @@ local ok, result = pcall(function(): number
 				liveCommitted = liveBackend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
 			end)
 			local liveRequest = newRequest({ speed = case.speed })
-			liveBackend:apply({ liveRequest })
+			liveBackend:apply(0, { liveRequest })
 			local liveTrack = liveAnimator.tracks[1]
 			liveTrack:setEngineTimePosition(5)
 			assert(liveBackend:setTrackPosition(liveRequest.trackKey, case.position), case.name .. " live boundary was rejected")
@@ -254,19 +253,19 @@ local ok, result = pcall(function(): number
 			speed = -0.75,
 			initialPosition = { kind = "normalized", value = 1 },
 		})
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		local generation = backend:getDebugSnapshot().tracks[1].details.generation
 
 		assert(track.calls.playSpeeds[1] == 0, "pending reverse start did not Play at zero speed")
 		assert(#track.calls.positionWrites == 0 and track.calls.adjustSpeed == 0, "pending reverse start moved before length resolved")
 		assert(#track.calls.order == 1 and track.calls.order[1].operation == "Play", "pending reverse start emitted an early native operation")
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(#track.calls.order == 1 and events == 0, "unchanged pending reverse start churned or completed")
 
 		track:setLength(8)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		local snapshot = backend:getDebugSnapshot().tracks[1]
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 8, "pending reverse start did not write the upper position once")
 		assert(track.calls.adjustSpeed == 1 and track.calls.speeds[1] == -0.75, "pending reverse start did not adopt retained negative speed once")
@@ -286,21 +285,21 @@ local ok, result = pcall(function(): number
 			speed = 0,
 			initialPosition = { kind = "normalized", value = 1 },
 		})
-		pivotBackend:apply({ pivotRequest })
+		pivotBackend:apply(0, { pivotRequest })
 		local pivotTrack = pivotAnimator.tracks[1]
 		local pivotGeneration = pivotBackend:getDebugSnapshot().tracks[1].details.generation
 
 		assert(pivotTrack.calls.playSpeeds[1] == 0, "zero-speed pending start did not Play at zero speed")
 		pivotRequest.speed = -1
-		pivotBackend:apply({ pivotRequest })
-		pivotBackend:apply({ pivotRequest })
+		pivotBackend:apply(0, { pivotRequest })
+		pivotBackend:apply(0, { pivotRequest })
 		assert(#pivotTrack.calls.order == 1, "zero-to-negative pending start escaped its zero-speed hold")
 		assert(pivotTrack.calls.adjustSpeed == 0, "zero-to-negative pending start adjusted before length resolved")
 		assert(pivotEvents == 0, "zero-to-negative pending start completed before length resolved")
 
 		pivotTrack:setLength(6)
-		pivotBackend:apply({ pivotRequest })
-		pivotBackend:apply({ pivotRequest })
+		pivotBackend:apply(0, { pivotRequest })
+		pivotBackend:apply(0, { pivotRequest })
 		local pivotSnapshot = pivotBackend:getDebugSnapshot().tracks[1]
 		assert(#pivotTrack.calls.positionWrites == 1 and pivotTrack.calls.positionWrites[1] == 6, "zero-to-negative pending start did not write the upper position once")
 		assert(pivotTrack.calls.adjustSpeed == 1 and pivotTrack.calls.speeds[1] == -1, "zero-to-negative pending start did not adopt retained negative speed once")
@@ -315,8 +314,8 @@ local ok, result = pcall(function(): number
 	test("known-length reverse start activates signed speed before one upper write", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ speed = -1, initialPosition = { kind = "normalized", value = 1 } })
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 
 		local track = animator.tracks[1]
 		local snapshot = backend:getDebugSnapshot().tracks[1]
@@ -334,14 +333,14 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:setEngineTimePosition(4)
 		local generation = backend:getDebugSnapshot().tracks[1].details.generation
 
 		for _, speed in { -1, 0, 0.5 } do
 			request.speed = speed
-			backend:apply({ request })
+			backend:apply(0, { request })
 		end
 
 		local snapshot = backend:getDebugSnapshot().tracks[1]
@@ -377,19 +376,19 @@ local ok, result = pcall(function(): number
 				committed = backend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
 			end)
 			local request = newRequest({ initialPosition = case.position, speed = case.initialSpeed })
-			backend:apply({ request })
+			backend:apply(0, { request })
 			local track = animator.tracks[1]
 			local generation = backend:getDebugSnapshot().tracks[1].details.generation
 
 			request.speed = 0
-			backend:apply({ request })
+			backend:apply(0, { request })
 			assert(events == 0 and backend:getDebugSnapshot().tracks[1].details.lifecycle == "active", case.name .. " zero pivot completed")
 			request.speed = case.inwardSpeed
-			backend:apply({ request })
+			backend:apply(0, { request })
 			assert(events == 0 and backend:getDebugSnapshot().tracks[1].details.lifecycle == "active", case.name .. " inward pivot completed")
 			request.speed = case.outwardSpeed
-			backend:apply({ request })
-			backend:apply({ request })
+			backend:apply(0, { request })
+			backend:apply(0, { request })
 			track:fireStopped()
 
 			local snapshot = backend:getDebugSnapshot().tracks[1]
@@ -409,12 +408,12 @@ local ok, result = pcall(function(): number
 			committed = backend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
 		end)
 		local request = newRequest({ speed = -1, initialPosition = { kind = "normalized", value = 1 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:setEngineTimePosition(0)
 		track:fireStopped()
 		track:fireStopped()
-		backend:apply({ request })
+		backend:apply(0, { request })
 
 		assert(events == 1 and committed, "natural reverse end did not complete exactly once after commit")
 		assert(animator.loadCount == 1 and track.calls.play == 1, "natural reverse end replayed")
@@ -434,7 +433,7 @@ local ok, result = pcall(function(): number
 			looped = true,
 			initialPosition = { kind = "normalized", value = 1 },
 		})
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 22 }), "reverse loop seconds position was rejected")
 		assert(backend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 }), "reverse loop normalized position was rejected")
 
@@ -453,11 +452,11 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest({ speed = -1, initialPosition = { kind = "seconds", value = 10 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local oldTrack = animator.tracks[1]
 		local oldGeneration = backend:getDebugSnapshot().tracks[1].details.generation
-		backend:apply({})
-		backend:apply({ request })
+		backend:apply(0, {})
+		backend:apply(0, { request })
 		local newTrack = animator.tracks[2]
 		local replacement: any = nil
 		for _, playback in backend:getDebugSnapshot().tracks do
@@ -478,15 +477,14 @@ local ok, result = pcall(function(): number
 		assert(backend:getDebugSnapshot().tracks[1].details.generation == replacement.details.generation, "stale reverse signals changed active ownership")
 	end)
 
-	test("unchanged apply and logical-delta-only changes are native-idempotent", function(): ()
+	test("unchanged apply and fade-only changes are native-idempotent", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ weight = 0.75, speed = 1.75, fadeTime = 0.6 })
-		backend:apply({ request })
-		backend:apply({ request })
-		request.deltaTime = 0
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		request.fadeTime = 1.2
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		assert(animator.loadCount == 1, "unchanged apply rematerialized the track")
 		assert(track.calls.play == 1, "unchanged apply replayed the track")
@@ -494,12 +492,12 @@ local ok, result = pcall(function(): number
 		assert(track.calls.adjustSpeed == 0, "unchanged speed was reapplied")
 		assert(track.calls.loopedWrites == 1 and track.calls.priorityWrites == 1, "unchanged properties were rewritten")
 
-		backend:apply({})
-		backend:apply({})
+		backend:apply(0, {})
+		backend:apply(0, {})
 		assert(track.calls.stop == 1, "repeated disappearance restarted retirement")
 		assert(track.calls.stopFades[1] == 0.2, "disappearance used the wrong fade")
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(animator.loadCount == 2, "reappearance did not materialize exactly one new generation")
 		assert(animator.tracks[2].calls.play == 1, "unchanged reappearing generation replayed")
 	end)
@@ -507,27 +505,27 @@ local ok, result = pcall(function(): number
 	test("changed native values update only their effective properties", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		request.weight = 0.5
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(track.calls.adjustWeight == 1 and track.calls.adjustSpeed == 0, "weight change touched the wrong property")
 		request.speed = 2
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(track.calls.adjustWeight == 1 and track.calls.adjustSpeed == 1, "speed change touched the wrong property")
 		request.looped = true
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(track.calls.loopedWrites == 2 and track.calls.play == 1, "loop change restarted playback")
 	end)
 
 	test("natural non-loop completion latches before an unchanged request can replay", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:fireStopped()
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(track.calls.play == 1, "natural completion replayed")
 		assert(backend:getDebugSnapshot().tracks[1].isPlaying == false, "natural completion was not latched")
 	end)
@@ -535,14 +533,14 @@ local ok, result = pcall(function(): number
 	test("forceRestart without a position starts one new generation at zero", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local oldTrack = animator.tracks[1]
 		oldTrack:setEngineTimePosition(4)
 		request.forceRestart = true
-		backend:apply({ request })
+		backend:apply(0, { request })
 		request.forceRestart = false
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		local newTrack = animator.tracks[2]
 		assert(oldTrack.calls.play == 1 and oldTrack.calls.stop == 1, "forceRestart did not retire the old generation")
 		assert(newTrack.calls.play == 1 and newTrack.TimePosition == 0, "default restart did not start at zero")
@@ -552,15 +550,15 @@ local ok, result = pcall(function(): number
 	test("forceRestart with a position uses it once instead of the zero default", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local oldTrack = animator.tracks[1]
 		oldTrack:setEngineTimePosition(4)
 		request.forceRestart = true
 		request.initialPosition = { kind = "normalized", value = 0.6 }
-		backend:apply({ request })
+		backend:apply(0, { request })
 		request.forceRestart = false
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		local newTrack = animator.tracks[2]
 		assert(oldTrack.calls.stop == 1 and newTrack.calls.play == 1, "positioned forceRestart was repeated")
 		assert(#newTrack.calls.positionWrites == 1 and newTrack.calls.positionWrites[1] == 6, "explicit restart position lost precedence")
@@ -569,12 +567,12 @@ local ok, result = pcall(function(): number
 	test("declarative initial position reapplies once to a new forced generation", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ initialPosition = { kind = "seconds", value = 2 } })
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		request.forceRestart = true
-		backend:apply({ request })
+		backend:apply(0, { request })
 		request.forceRestart = false
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(animator.loadCount == 2, "forced materialization generation did not restart exactly once")
 		assert(#animator.tracks[1].calls.positionWrites == 1, "first generation position was not one-shot")
 		assert(#animator.tracks[2].calls.positionWrites == 1, "second generation position was not one-shot")
@@ -585,7 +583,7 @@ local ok, result = pcall(function(): number
 	test("live positioning moves forward and backward without replacing the generation", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ weight = 0.7, speed = 1.5, looped = true, logicalPriority = 50 })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local before = backend:getDebugSnapshot().tracks[1]
 		local generation = before.details.generation
 		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 7 }), "forward position was rejected")
@@ -604,7 +602,7 @@ local ok, result = pcall(function(): number
 		local backend, animator = newBackend(10)
 		assert(not backend:offsetTrackPosition("missing", 1), "missing relative target was accepted")
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:setEngineTimePosition(4)
 
@@ -617,16 +615,16 @@ local ok, result = pcall(function(): number
 		assert(backend:offsetTrackPosition(request.trackKey, 1), "active relative target was rejected")
 		assert(track.calls.positionWrites[1] == 5, "accepted relative offset wrote the wrong position")
 
-		backend:apply({})
+		backend:apply(0, {})
 		assert(not backend:offsetTrackPosition(request.trackKey, 1), "retiring relative target was accepted")
 
 		local completedBackend = newBackend(10)
-		completedBackend:apply({ request })
+		completedBackend:apply(0, { request })
 		assert(completedBackend:offsetTrackPosition(request.trackKey, 10), "completing relative command was rejected")
 		assert(not completedBackend:offsetTrackPosition(request.trackKey, -1), "completed relative target was accepted")
 
 		local destroyedBackend = newBackend(10)
-		destroyedBackend:apply({ request })
+		destroyedBackend:apply(0, { request })
 		destroyedBackend:destroy()
 		assert(not destroyedBackend:offsetTrackPosition(request.trackKey, 1), "destroyed backend accepted a relative target")
 	end)
@@ -634,7 +632,7 @@ local ok, result = pcall(function(): number
 	test("known-length offsets compose on one generation without native property churn", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest({ weight = 0.7, speed = 1.5, logicalPriority = 50, fadeTime = 0.6 })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:setEngineTimePosition(5)
 		local before = backend:getDebugSnapshot().tracks[1]
@@ -667,7 +665,7 @@ local ok, result = pcall(function(): number
 				events += 1
 			end)
 			local request = newRequest({ speed = case.speed, looped = true })
-			backend:apply({ request })
+			backend:apply(0, { request })
 			local track = animator.tracks[1]
 			track:setEngineTimePosition(case.start)
 			assert(backend:offsetTrackPosition(request.trackKey, case.first), case.name .. " first loop offset was rejected")
@@ -698,7 +696,7 @@ local ok, result = pcall(function(): number
 				committed = backend:getDebugSnapshot().tracks[1].details.lifecycle == "completed"
 			end)
 			local request = newRequest({ speed = case.speed })
-			backend:apply({ request })
+			backend:apply(0, { request })
 			local track = animator.tracks[1]
 			track:setEngineTimePosition(case.start)
 			assert(backend:offsetTrackPosition(request.trackKey, case.delta), case.name .. " offset was rejected")
@@ -719,7 +717,7 @@ local ok, result = pcall(function(): number
 	test("unresolved offsets accumulate and use the physical base observed at resolution", function(): ()
 		local backend, animator = newBackend(0)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		assert(backend:offsetTrackPosition(request.trackKey, 3), "first unresolved offset was rejected")
 		assert(backend:offsetTrackPosition(request.trackKey, -1), "second unresolved offset was rejected")
@@ -727,8 +725,8 @@ local ok, result = pcall(function(): number
 		assert(#track.calls.positionWrites == 0 and track.calls.positionReads == 0, "unresolved offsets observed or wrote position early")
 
 		track:setLength(10)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 6, "unresolved offsets did not use the resolution-time physical base")
 		assert(track.calls.positionReads == 1, "unresolved offsets did not observe the physical base exactly once")
 		assert(track.calls.play == 1 and animator.loadCount == 1, "unresolved offset resolution replayed or replaced playback")
@@ -748,7 +746,7 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest({ looped = true })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		local before = backend:getDebugSnapshot().tracks[1]
 		local generation = before.details.generation
@@ -803,8 +801,8 @@ local ok, result = pcall(function(): number
 		local resolvedLength = 10
 		local expectedResolved = resolveLoopOffset(0, validOffset, resolvedLength)
 		track:setLength(resolvedLength)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(
 			#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == expectedResolved,
 			"valid pending offset was not resolved exactly once after rejected overflow"
@@ -814,7 +812,7 @@ local ok, result = pcall(function(): number
 		local ordinaryOffset = 1.25
 		local expectedOrdinary = resolveLoopOffset(expectedResolved, ordinaryOffset, resolvedLength)
 		assert(backend:offsetTrackPosition(request.trackKey, ordinaryOffset), "generation remained poisoned after overflow rejection")
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(
 			#track.calls.positionWrites == 2 and track.calls.positionWrites[2] == expectedOrdinary,
 			"ordinary offset failed after overflow rejection"
@@ -822,15 +820,15 @@ local ok, result = pcall(function(): number
 
 		local cancellationBackend, cancellationAnimator = newBackend(0)
 		local cancellationRequest = newRequest({ looped = true })
-		cancellationBackend:apply({ cancellationRequest })
+		cancellationBackend:apply(0, { cancellationRequest })
 		assert(cancellationBackend:offsetTrackPosition(cancellationRequest.trackKey, validOffset), "cancellation base was rejected")
 		assert(cancellationBackend:offsetTrackPosition(cancellationRequest.trackKey, -validOffset), "finite cancellation was rejected")
 		local cancellationTrack = cancellationAnimator.tracks[1]
 		local cancellationSum = validOffset + -validOffset
 		local expectedCancellation = resolveLoopOffset(0, cancellationSum, resolvedLength)
 		cancellationTrack:setLength(resolvedLength)
-		cancellationBackend:apply({ cancellationRequest })
-		cancellationBackend:apply({ cancellationRequest })
+		cancellationBackend:apply(0, { cancellationRequest })
+		cancellationBackend:apply(0, { cancellationRequest })
 		assert(
 			#cancellationTrack.calls.positionWrites == 1
 				and cancellationTrack.calls.positionWrites[1] == expectedCancellation,
@@ -841,15 +839,15 @@ local ok, result = pcall(function(): number
 	test("pending normalized initial position composes offsets into one idempotent write", function(): ()
 		local backend, animator = newBackend(0)
 		local request = newRequest({ initialPosition = { kind = "normalized", value = 0.25 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		assert(backend:offsetTrackPosition(request.trackKey, 3), "pending initial positive offset was rejected")
 		assert(backend:offsetTrackPosition(request.trackKey, -1), "pending initial negative offset was rejected")
 		assert(#track.calls.positionWrites == 0, "pending initial plus offsets wrote before length resolved")
 
 		track:setLength(8)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 4, "pending normalized base plus offsets resolved incorrectly")
 		assert(track.calls.positionReads == 0, "pending absolute base incorrectly read physical position")
 		assert(track.calls.play == 1 and track.calls.adjustSpeed == 0, "pending initial plus offsets churned playback")
@@ -872,43 +870,43 @@ local ok, result = pcall(function(): number
 			end
 			sawCommittedBatch = lifecycles.terminal == "completed" and weights.companion == 0.5
 		end)
-		backend:apply({ terminal, companion })
+		backend:apply(0, { terminal, companion })
 		assert(backend:offsetTrackPosition(terminal.trackKey, 2), "pending relative terminal was rejected")
 		animator.tracks[1]:setLength(10)
 		companion.weight = 0.5
-		backend:apply({ terminal, companion })
+		backend:apply(0, { terminal, companion })
 		assert(sawCommittedBatch, "relative completion dispatched before the batch committed")
 	end)
 
 	test("unresolved absolute and relative commands preserve supersession order", function(): ()
 		local firstBackend, firstAnimator = newBackend(0)
 		local firstRequest = newRequest()
-		firstBackend:apply({ firstRequest })
+		firstBackend:apply(0, { firstRequest })
 		assert(firstBackend:offsetTrackPosition(firstRequest.trackKey, 4), "offset-before-absolute was rejected")
 		assert(firstBackend:setTrackPosition(firstRequest.trackKey, { kind = "normalized", value = 0.5 }), "absolute supersession was rejected")
 		assert(firstBackend:offsetTrackPosition(firstRequest.trackKey, 1), "offset-after-absolute was rejected")
 		firstAnimator.tracks[1]:setLength(10)
-		firstBackend:apply({ firstRequest })
-		firstBackend:apply({ firstRequest })
+		firstBackend:apply(0, { firstRequest })
+		firstBackend:apply(0, { firstRequest })
 		assert(#firstAnimator.tracks[1].calls.positionWrites == 1 and firstAnimator.tracks[1].calls.positionWrites[1] == 6, "absolute did not supersede the earlier offset or retain the later offset")
 
 		local secondBackend, secondAnimator = newBackend(0)
 		local secondRequest = newRequest()
-		secondBackend:apply({ secondRequest })
+		secondBackend:apply(0, { secondRequest })
 		assert(secondBackend:setTrackPosition(secondRequest.trackKey, { kind = "seconds", value = 4 }), "unresolved absolute was rejected")
 		assert(secondBackend:offsetTrackPosition(secondRequest.trackKey, 2), "first post-absolute offset was rejected")
 		assert(secondBackend:offsetTrackPosition(secondRequest.trackKey, -1), "second post-absolute offset was rejected")
 		secondAnimator.tracks[1]:setLength(10)
-		secondBackend:apply({ secondRequest })
+		secondBackend:apply(0, { secondRequest })
 		assert(#secondAnimator.tracks[1].calls.positionWrites == 1 and secondAnimator.tracks[1].calls.positionWrites[1] == 5, "post-absolute offsets did not compose from the new base")
 
 		local thirdBackend, thirdAnimator = newBackend(0)
 		local thirdRequest = newRequest()
-		thirdBackend:apply({ thirdRequest })
+		thirdBackend:apply(0, { thirdRequest })
 		assert(thirdBackend:offsetTrackPosition(thirdRequest.trackKey, 7), "superseded unresolved offset was rejected")
 		assert(thirdBackend:setTrackPosition(thirdRequest.trackKey, { kind = "seconds", value = 3 }), "final unresolved absolute was rejected")
 		thirdAnimator.tracks[1]:setLength(10)
-		thirdBackend:apply({ thirdRequest })
+		thirdBackend:apply(0, { thirdRequest })
 		assert(#thirdAnimator.tracks[1].calls.positionWrites == 1 and thirdAnimator.tracks[1].calls.positionWrites[1] == 3, "final absolute retained a superseded offset")
 	end)
 
@@ -919,17 +917,17 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest({ speed = -1, initialPosition = { kind = "normalized", value = 1 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		local generation = backend:getDebugSnapshot().tracks[1].details.generation
 		assert(backend:offsetTrackPosition(request.trackKey, -2), "first unresolved reverse offset was rejected")
 		assert(backend:offsetTrackPosition(request.trackKey, 0.5), "second unresolved reverse offset was rejected")
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(#track.calls.order == 1 and track.calls.order[1].operation == "Play" and track.calls.order[1].value == 0, "unresolved reverse offsets escaped the zero-speed hold")
 
 		track:setLength(10)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		local snapshot = backend:getDebugSnapshot().tracks[1]
 		assert(#track.calls.order == 3, "unresolved reverse offset resolution emitted extra native operations")
 		assert(track.calls.order[2].operation == "TimePosition" and track.calls.order[2].value == 8.5, "unresolved reverse offsets did not position once before speed")
@@ -942,13 +940,13 @@ local ok, result = pcall(function(): number
 	test("pending offsets cannot escape a replaced generation", function(): ()
 		local backend, animator = newBackend(0)
 		local oldRequest = newRequest({ initialPosition = { kind = "normalized", value = 0.5 } })
-		backend:apply({ oldRequest })
+		backend:apply(0, { oldRequest })
 		local oldTrack = animator.tracks[1]
 		local oldGeneration = backend:getDebugSnapshot().tracks[1].details.generation
 		assert(backend:offsetTrackPosition(oldRequest.trackKey, 2), "old generation pending offset was rejected")
 
 		local replacement = newRequest({ clip = "wave", initialPosition = { kind = "normalized", value = 0.25 } })
-		backend:apply({ replacement })
+		backend:apply(0, { replacement })
 		local newTrack = animator.tracks[2]
 		local newGeneration = backend:getDebugSnapshot().tracks[2].details.generation
 		assert(newGeneration > oldGeneration, "replacement reused the pending-offset generation")
@@ -959,8 +957,8 @@ local ok, result = pcall(function(): number
 		assert(#oldTrack.calls.positionWrites == 0 and oldTrack.calls.destroy == 1, "retired pending offset wrote or leaked")
 
 		newTrack:setLength(8)
-		backend:apply({ replacement })
-		backend:apply({ replacement })
+		backend:apply(0, { replacement })
+		backend:apply(0, { replacement })
 		local snapshot = backend:getDebugSnapshot().tracks[1]
 		assert(#newTrack.calls.positionWrites == 1 and newTrack.calls.positionWrites[1] == 3, "replacement did not resolve only its own base and offset")
 		assert(snapshot.details.generation == newGeneration and snapshot.details.lifecycle == "active", "stale pending offset changed replacement ownership")
@@ -974,12 +972,12 @@ local ok, result = pcall(function(): number
 		backend:bindToTrackCompleted(function()
 			events += 1
 			assert(not backend:offsetTrackPosition(request.trackKey, -1), "relative completion callback revived its tombstone")
-			backend:apply({ replacement })
+			backend:apply(0, { replacement })
 			assert(backend:offsetTrackPosition(replacement.trackKey, 1), "relative completion callback could not offset its replacement")
 			backend:clear()
 			backend:destroy()
 		end)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		animator.tracks[1]:setEngineTimePosition(9)
 		assert(backend:offsetTrackPosition(request.trackKey, 2), "relative completion command was rejected")
 
@@ -996,7 +994,7 @@ local ok, result = pcall(function(): number
 			failedCalls += 1
 			error("expected relative completion failure")
 		end)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local oldTrack = animator.tracks[1]
 		oldTrack:setEngineTimePosition(9)
 		local completed, resultOrError = pcall(function(): unknown
@@ -1015,7 +1013,7 @@ local ok, result = pcall(function(): number
 			laterEvents += 1
 		end)
 		local replacement = newRequest({ clip = "wave", state = "later" })
-		backend:apply({ replacement })
+		backend:apply(0, { replacement })
 		local replacementTrack = animator.tracks[2]
 		replacementTrack:setEngineTimePosition(9)
 		assert(backend:offsetTrackPosition(replacement.trackKey, 2), "later relative completion was rejected")
@@ -1027,25 +1025,25 @@ local ok, result = pcall(function(): number
 	test("pending live positioning resolves and permanently supersedes a pending initial position", function(): ()
 		local backend, animator = newBackend(0)
 		local request = newRequest({ initialPosition = { kind = "normalized", value = 0.25 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 6 }), "pending live position was rejected")
 		assert(#track.calls.positionWrites == 0, "zero-length live position wrote early")
 		track:setLength(10)
-		backend:apply({ request })
-		backend:apply({ request })
+		backend:apply(0, { request })
+		backend:apply(0, { request })
 		assert(#track.calls.positionWrites == 1 and track.calls.positionWrites[1] == 6, "pending initial position won after live supersession")
 	end)
 
 	test("invalid live positions reject before changing pending state", function(): ()
 		local backend, animator = newBackend(0)
 		local request = newRequest({ initialPosition = { kind = "seconds", value = 2 } })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		expectError(function()
 			backend:setTrackPosition(request.trackKey, { kind = "seconds", value = -1 })
 		end, "invalid live position was accepted")
 		animator.tracks[1]:setLength(10)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(animator.tracks[1].calls.positionWrites[1] == 2, "invalid live command mutated the pending initial position")
 	end)
 
@@ -1062,11 +1060,11 @@ local ok, result = pcall(function(): number
 					and #snapshot.tracks == 1
 					and snapshot.tracks[1].details.lifecycle == "completed"
 			end)
-			backend:apply({ request })
+			backend:apply(0, { request })
 			assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = value }), "terminal position was rejected")
 			assert(events == 1 and committed, "terminal completion dispatched before tombstone commit")
 			assert(not backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 1 }), "completed key was revived")
-			backend:apply({ request })
+			backend:apply(0, { request })
 			animator.tracks[1]:fireStopped()
 			assert(events == 1 and animator.loadCount == 1, "completed request replayed or emitted twice")
 			animator.tracks[1]:fireEnded()
@@ -1082,7 +1080,7 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest({ looped = true })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 22 }), "loop seconds position was rejected")
 		assert(backend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 }), "loop normalized position was rejected")
 		local writes = animator.tracks[1].calls.positionWrites
@@ -1097,7 +1095,7 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest({ looped = true })
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local oldTrack = animator.tracks[1]
 		local oldGeneration = backend:getDebugSnapshot().tracks[1].details.generation
 
@@ -1108,7 +1106,7 @@ local ok, result = pcall(function(): number
 		assert(oldTrack.Ended:getConnectionCount() == 0, "active looped Ended leaked Ended")
 		assert(#backend:getDebugSnapshot().tracks == 0, "active looped Ended left stale lifecycle or debug ownership")
 
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local newTrack = animator.tracks[2]
 		local replacement = backend:getDebugSnapshot().tracks[1]
 		assert(animator.loadCount == 2, "unchanged looped request did not rematerialize")
@@ -1128,12 +1126,12 @@ local ok, result = pcall(function(): number
 		local backend = newBackend(10)
 		assert(not backend:setTrackPosition("missing", { kind = "seconds", value = 1 }), "missing key was accepted")
 		local request = newRequest()
-		backend:apply({ request })
-		backend:apply({})
+		backend:apply(0, { request })
+		backend:apply(0, {})
 		assert(not backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 1 }), "retiring key was accepted")
 
 		local completedBackend = newBackend(10)
-		completedBackend:apply({ request })
+		completedBackend:apply(0, { request })
 		completedBackend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 })
 		assert(not completedBackend:setTrackPosition(request.trackKey, { kind = "seconds", value = 1 }), "completed key was accepted")
 		completedBackend:destroy()
@@ -1147,7 +1145,7 @@ local ok, result = pcall(function(): number
 		backend:bindToTrackCompleted(function(event)
 			events[#events + 1] = event
 		end)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		track:fireStopped()
 		track:fireStopped()
@@ -1155,7 +1153,7 @@ local ok, result = pcall(function(): number
 		assert(events[1].layer == request.layer and events[1].state == request.state, "completion identity was wrong")
 		track:fireEnded()
 		assert(track.calls.destroy == 1 and animator.animations[1].destroyed, "Ended did not clean physical ownership")
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(animator.loadCount == 1 and #events == 1, "unchanged tombstoned request replayed")
 	end)
 
@@ -1167,7 +1165,7 @@ local ok, result = pcall(function(): number
 			callbacks += 1
 			error("expected Ended completion failure")
 		end)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local track = animator.tracks[1]
 		local ended, resultOrError = pcall(function(): unknown
 			track:fireEnded()
@@ -1192,7 +1190,7 @@ local ok, result = pcall(function(): number
 			laterEvents[#laterEvents + 1] = event
 		end)
 		local replacementRequest = newRequest({ clip = "wave", state = "replacement" })
-		backend:apply({ replacementRequest })
+		backend:apply(0, { replacementRequest })
 		local replacementTrack = animator.tracks[2]
 		local replacementSnapshot = backend:getDebugSnapshot()
 		assert(animator.loadCount == 2, "different-clip presence did not materialize a replacement generation")
@@ -1237,7 +1235,7 @@ local ok, result = pcall(function(): number
 			end
 			sawCommittedBatch = lifecycles.terminal == "completed" and lifecycles.companion == "active"
 		end)
-		backend:apply({ terminal, companion })
+		backend:apply(0, { terminal, companion })
 		assert(sawCommittedBatch, "initial terminal completion dispatched before the batch committed")
 	end)
 
@@ -1245,30 +1243,30 @@ local ok, result = pcall(function(): number
 		local request = newRequest({ initialPosition = { kind = "normalized", value = 1 } })
 
 		local omissionBackend, omissionAnimator = newBackend(10)
-		omissionBackend:apply({ request })
-		omissionBackend:apply({ request })
+		omissionBackend:apply(0, { request })
+		omissionBackend:apply(0, { request })
 		assert(omissionAnimator.loadCount == 1, "same tombstoned request replayed")
-		omissionBackend:apply({})
-		omissionBackend:apply({ request })
+		omissionBackend:apply(0, {})
+		omissionBackend:apply(0, { request })
 		assert(omissionAnimator.loadCount == 2, "omission did not retire the tombstone")
 
 		local replacementBackend, replacementAnimator = newBackend(10)
-		replacementBackend:apply({ request })
-		replacementBackend:apply({ newRequest({ clip = "wave" }) })
+		replacementBackend:apply(0, { request })
+		replacementBackend:apply(0, { newRequest({ clip = "wave" }) })
 		assert(replacementAnimator.loadCount == 2, "different clip did not replace the tombstone")
 
 		local restartBackend, restartAnimator = newBackend(10)
-		restartBackend:apply({ request })
-		restartBackend:apply({ newRequest({ forceRestart = true }) })
+		restartBackend:apply(0, { request })
+		restartBackend:apply(0, { newRequest({ forceRestart = true }) })
 		assert(restartAnimator.loadCount == 2, "force restart did not replace the tombstone")
 
 		local clearBackend, clearAnimator = newBackend(10)
-		clearBackend:apply({ request })
+		clearBackend:apply(0, { request })
 		clearBackend:clear()
 		assert(#clearBackend:getDebugSnapshot().tracks == 0 and clearAnimator.tracks[1].calls.destroy == 1, "clear retained tombstone or physics")
 
 		local destroyBackend, destroyAnimator = newBackend(10)
-		destroyBackend:apply({ request })
+		destroyBackend:apply(0, { request })
 		destroyBackend:destroy()
 		assert(#destroyBackend:getDebugSnapshot().tracks == 0 and destroyAnimator.tracks[1].calls.destroy == 1, "destroy retained tombstone or physics")
 	end)
@@ -1281,7 +1279,7 @@ local ok, result = pcall(function(): number
 				events += 1
 			end)
 			local request = newRequest()
-			backend:apply({ request })
+			backend:apply(0, { request })
 			local oldTrack = animator.tracks[1]
 			action(backend, request)
 			oldTrack:fireStopped()
@@ -1292,13 +1290,13 @@ local ok, result = pcall(function(): number
 			backend:stopLayer("base", 0.4)
 		end, "stopLayer")
 		runCase(function(backend, _request)
-			backend:apply({})
+			backend:apply(0, {})
 		end, "disappearance")
 		runCase(function(backend, _request)
-			backend:apply({ newRequest({ clip = "wave" }) })
+			backend:apply(0, { newRequest({ clip = "wave" }) })
 		end, "replacement")
 		runCase(function(backend, _request)
-			backend:apply({ newRequest({ forceRestart = true }) })
+			backend:apply(0, { newRequest({ forceRestart = true }) })
 		end, "forceRestart")
 		runCase(function(backend, _request)
 			backend:clear()
@@ -1315,10 +1313,10 @@ local ok, result = pcall(function(): number
 			events += 1
 		end)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local oldTrack = animator.tracks[1]
-		backend:apply({})
-		backend:apply({ request })
+		backend:apply(0, {})
+		backend:apply(0, { request })
 		local newTrack = animator.tracks[2]
 		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 3 }), "new active generation was not addressable")
 		oldTrack:fireStopped()
@@ -1327,14 +1325,14 @@ local ok, result = pcall(function(): number
 		assert(newTrack.calls.destroy == 0 and newTrack.TimePosition == 3, "stale old signals mutated the new generation")
 
 		local replacement = newRequest({ clip = "wave", fadeTime = 0.6 })
-		backend:apply({ replacement })
+		backend:apply(0, { replacement })
 		assert(animator.loadCount == 3 and newTrack.calls.stopFades[1] == 0.6, "different-clip replacement did not use incoming fade")
 	end)
 
 	test("non-zero fade waits for Ended while zero fade and inactive retirement clean immediately", function(): ()
 		local backend, animator = newBackend(10)
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local fadingTrack = animator.tracks[1]
 		backend:stopLayer("base", 0.5)
 		assert(fadingTrack.calls.stopFades[1] == 0.5 and fadingTrack.calls.destroy == 0, "non-zero fade cleaned before Ended")
@@ -1344,12 +1342,12 @@ local ok, result = pcall(function(): number
 		assert(fadingTrack.Ended:getConnectionCount() == 0, "Ended connection leaked after cleanup")
 
 		local zeroBackend, zeroAnimator = newBackend(10)
-		zeroBackend:apply({ request })
+		zeroBackend:apply(0, { request })
 		zeroBackend:stopLayer("base", 0)
 		assert(zeroAnimator.tracks[1].calls.destroy == 1, "zero-fade retirement did not clean immediately")
 
 		local inactiveBackend, inactiveAnimator = newBackend(10)
-		inactiveBackend:apply({ request })
+		inactiveBackend:apply(0, { request })
 		inactiveAnimator.tracks[1]:setEnginePlaying(false)
 		inactiveBackend:stopLayer("base", 0.5)
 		assert(inactiveAnimator.tracks[1].calls.destroy == 1, "inactive retirement did not clean immediately")
@@ -1377,11 +1375,11 @@ local ok, result = pcall(function(): number
 		end)
 
 		local request = newRequest()
-		backend:apply({ request })
+		backend:apply(0, { request })
 		backend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 })
 		request.forceRestart = true
 		request.initialPosition = { kind = "normalized", value = 1 }
-		backend:apply({ request })
+		backend:apply(0, { request })
 		assert(table.concat(calls, ",") == "first,second,added", "listener mutation changed the active dispatch snapshot")
 	end)
 
@@ -1393,7 +1391,7 @@ local ok, result = pcall(function(): number
 			failedCalls += 1
 			error("expected completion callback failure")
 		end)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		local completed, resultOrError = pcall(function(): unknown
 			backend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 })
 			return nil
@@ -1408,7 +1406,7 @@ local ok, result = pcall(function(): number
 			laterEvents[#laterEvents + 1] = event
 		end)
 		local laterRequest = newRequest({ state = "later", forceRestart = true })
-		backend:apply({ laterRequest })
+		backend:apply(0, { laterRequest })
 		assert(#laterEvents == 0, "failed completion event remained queued")
 		backend:setTrackPosition(laterRequest.trackKey, { kind = "normalized", value = 1 })
 		assert(#laterEvents == 1 and laterEvents[1].state == "later", "later completed generation did not dispatch exactly once")
@@ -1425,7 +1423,7 @@ local ok, result = pcall(function(): number
 			backend:clear()
 			backend:destroy()
 		end)
-		backend:apply({ request })
+		backend:apply(0, { request })
 		backend:setTrackPosition(request.trackKey, { kind = "normalized", value = 1 })
 		animator.tracks[1]:fireStopped()
 		animator.tracks[1]:fireEnded()

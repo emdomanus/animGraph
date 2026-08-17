@@ -6,8 +6,10 @@ local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
 local DefTypes = require(script.Parent.Parent.def)
 
 export type PerJointFallbackMode = "full" | "priorityTier" | "none"
+export type BackendPositionMode = "nativeRate" | "sampledPosition"
 
 export type BackendCapabilities = {
+	positionMode: BackendPositionMode,
 	unlimitedPriority: boolean,
 	perJointFallback: PerJointFallbackMode,
 	customMasks: boolean,
@@ -35,6 +37,7 @@ export type BackendDebugSnapshot = {
 export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
 	apply: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		sampleTime: number,
 		requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
 	) -> (),
 	setTrackPosition: (

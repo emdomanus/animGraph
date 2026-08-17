@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Replaced `TimeSource` and scalar `LogicalPositionReader` with explicit
+  `controller:update(sampleTime)` and `LogicalTimeReader(sampleTime) ->
+  { position, addressRevision }`. Equal coordinates re-evaluate, backward
+  controller coordinates reject, and distinct readers are sampled once.
+- Replaced graph `dt`/`ClipRequest.deltaTime` accumulation with layer logical
+  phase rebasing and transition start-position anchors. Stationary/backward
+  reader movement and revision/reader changes hold phase and rebase.
+- Added a next-update graph-intent transaction for play/stop, parameters,
+  layer properties, and timing-reader changes while retaining synchronous
+  active-generation absolute/relative positioning.
+- Added fixed backend `nativeRate` and `sampledPosition` strategies and
+  `backend:apply(sampleTime, requests)`. Native behavior remains optimized;
+  sampled playback uses physical phase anchors and zero-rate Roblox tracks.
+- Added deterministic sampled-backend coverage and migrated the dev harness,
+  public API, diagrams, and VoxelMMO integration boundary to the new contract.
 - Added backend-neutral `controller:offsetTrackPosition` and backend relative
   positioning with finite signed seconds, active-generation boolean semantics,
   known-length atomic read/modify/write, and generation-local unresolved offset
@@ -17,9 +32,6 @@
 - Added the deterministic reverse boundary/start/pivot/loop/rematerialization
   matrix and updated the backend/API/Studio contracts. Recorded authoritative
   operator acceptance of the complete CP-AG-R Studio matrix.
-- Renamed the timing seam to `LogicalPositionReader` / `logicalPositionReader`
-  and its input to `time`, distinguishing the shared sampled time from each
-  reader's returned logical position without retaining compatibility aliases.
 - Recorded operator-reviewed CP-TA3 closure: the 51-test deterministic/static
   gate and all 12 Studio cases passed; VoxelMMO timing proofs and release
   decisions remain deferred.
@@ -35,16 +47,10 @@
 - Extended deterministic lifecycle coverage and the Studio dev harness for live
   addressing, terminal/natural completion, looping, replacement, reappearance
   during fade, listener mutation, and physical cleanup visibility.
-- Replaced the controller-wide delta argument with caller-scheduled `update()` that
-  samples one `TimeSource` time and selected play/layer/default
-  `LogicalPositionReader` functions, derives per-activation deltas, and adds
-  request-local `deltaTime`.
-- Removed the controller-owned frame-binding helper; callers now own update scheduling. Non-finite or
-  backward samples reject atomically while first, held, and exact-forward
-  samples use the documented baseline behavior.
-- Added canonical `AnimationPosition`, `TimeSource`, and `LogicalPositionReader`
-  declarations under `types/def`, moved implementation helpers under `utils`,
-  and deleted the superseded public delta-map surface completely.
+- Removed the controller-owned frame-binding helper; callers own update
+  scheduling.
+- Consolidated canonical public timing and positioning definitions under
+  `types/def` and moved implementation helpers under `utils`.
 - Replaced the two legacy numeric position fields with the canonical, validated
   `AnimationPosition` union and one-shot `initialPosition`.
 - Made Roblox backend apply idempotent for unchanged live generations, added

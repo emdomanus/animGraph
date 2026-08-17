@@ -2,7 +2,7 @@
 
 Source: `src/animGraph/types/def/init.luau`
 
-These definitions are declared once and re-exported through the type and package
+These definitions are declared once and re-exported through the package type
 barrels.
 
 ## AnimationPosition
@@ -13,38 +13,33 @@ export type AnimationPosition =
 	| { kind: "normalized", value: number }
 ```
 
-Seconds are finite and non-negative. Normalized values are finite and in the
-inclusive interval `[0, 1]`. The union addresses native clip position for
-initial materialization or live backend positioning; it is not the graph's
-logical-position sample.
+Seconds are finite and non-negative. Normalized values are finite and within
+`[0, 1]`. This union addresses physical clip position; it is not logical graph
+phase. `offsetTrackPosition` instead accepts finite signed clip seconds.
 
-`offsetTrackPosition` deliberately adds no new public position type. Its
-`deltaSeconds` argument is a finite signed number of native clip seconds and is
-an atomic relative mutation of one eligible active generation. Each delta and
-any accumulated unresolved offset must remain finite and representable. It is
-distinct from the absolute `AnimationPosition` union. AnimGraph exposes neither a public
-position getter nor pending/physical track state.
-
-## TimeSource
+## LogicalTimeSample and LogicalTimeReader
 
 ```luau
-export type TimeSource = () -> number
+export type LogicalTimeSample = {
+	position: number,
+	addressRevision: number,
+}
+
+export type LogicalTimeReader = (sampleTime: number) -> LogicalTimeSample
 ```
 
-A controller samples its source exactly once per successful update attempt. The
-finite result is one shared time passed to all selected readers. AnimGraph does
-not integrate it, treat it as a logical position, or own its lifetime.
+The caller passes one finite monotonic coordinate to
+`controller:update(sampleTime)`. Each distinct selected reader receives it once
+and must return finite fields.
 
-## LogicalPositionReader
+`position` is the reader's source address. `addressRevision` changes only for a
+discontinuous re-address, not an ordinary continuous rate change. The layer
+runtime turns reader samples into monotonic logical graph phase:
 
-```luau
-export type LogicalPositionReader = (time: number) -> number
-```
-
-A reader converts the supplied time into one finite logical position. Each
-distinct selected function is sampled at most once per update. AnimGraph derives
-delta from consecutive per-activation positions; it does not accept a rate,
-timescale, clock, mutable timeline, or reset/rebase operation.
+- first sample: phase remains zero;
+- forward movement with the same revision: add the exact difference;
+- stationary/backward movement: hold phase and rebase the source baseline;
+- revision or reader change: hold phase and rebase.
 
 ## TrackCompletedEvent
 
@@ -57,12 +52,9 @@ export type TrackCompletedEvent<LayerT, StateT> = {
 }
 ```
 
-The event identifies one completed non-looping materialized generation without
-exposing a Roblox track or signal. Natural forward upper-end playback, natural
-reverse lower-end playback, and accepted initial/live boundaries whose desired
-signed speed points outward emit it exactly once after backend state is
-committed. Inward or zero-speed boundary placement, looping addressing, and
-explicit retirement do not emit it.
+The event identifies one completed non-looping physical generation without
+exposing a Roblox track. Native and sampled backend strategies share the same
+event contract.
 
 ## Release
 
@@ -70,4 +62,4 @@ explicit retirement do not emit it.
 export type Release = () -> ()
 ```
 
-Completion and controller-event bindings return an idempotent release function.
+Completion and controller-event bindings return idempotent release functions.

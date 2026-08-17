@@ -6,9 +6,12 @@ export type AnimationPosition =
 	{ kind: "seconds", value: number }
 	| { kind: "normalized", value: number }
 
-export type TimeSource = () -> number
+export type LogicalTimeSample = {
+	position: number,
+	addressRevision: number,
+}
 
-export type LogicalPositionReader = (time: number) -> number
+export type LogicalTimeReader = (sampleTime: number) -> LogicalTimeSample
 
 export type Release = () -> ()
 

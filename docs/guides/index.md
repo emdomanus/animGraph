@@ -9,7 +9,7 @@ dependency rules live in [Architecture](../architecture.md).
 - [Getting Started](./getting-started.md) constructs a controller and drives it
   from caller-owned scheduling.
 - [Motions](./motions.md) composes clips and blend nodes while keeping logical
-  delta separate from native speed.
+  graph phase separate from physical speed.
 - [State Machines](./state-machines.md) authors transitions and trigger-driven
   state changes.
 - [Dev Harness](./dev-harness.md) exercises the Roblox-backed runtime in Studio.

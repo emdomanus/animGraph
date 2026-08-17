@@ -32,8 +32,8 @@ completion: "Completion return path" {
   animation-controller: AnimationController
   event-bus: EventBus
 
-  animation-track -> anim-playback: "Stopped / Ended" {class: completion}
-  anim-playback -> roblox-backend: "classified completion" {class: completion}
+  animation-track -> anim-playback: "native signals / sampled boundary" {class: completion}
+  anim-playback -> roblox-backend: "strategy-classified completion" {class: completion}
   roblox-backend -> tombstone: "commit exactly once" {class: completion}
   roblox-backend -> animation-controller: trackCompleted {class: completion}
   animation-controller -> event-bus: "snapshot dispatch" {class: completion}

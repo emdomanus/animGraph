@@ -18,8 +18,8 @@ local RobloxAnimatorBackendTypes = require(script.backends.robloxAnimatorBackend
 local StackModifierTypes = require(script.components.stackModifier)
 
 export type AnimationPosition = DefTypes.AnimationPosition
-export type TimeSource = DefTypes.TimeSource
-export type LogicalPositionReader = DefTypes.LogicalPositionReader
+export type LogicalTimeSample = DefTypes.LogicalTimeSample
+export type LogicalTimeReader = DefTypes.LogicalTimeReader
 export type Release = DefTypes.Release
 export type TrackCompletedEvent<LayerT, StateT> = DefTypes.TrackCompletedEvent<LayerT, StateT>
 
@@ -102,6 +102,7 @@ export type Blend2DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	Blend2DNodeTypes.Blend2DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 
 export type PerJointFallbackMode = AnimationBackendTypes.PerJointFallbackMode
+export type BackendPositionMode = AnimationBackendTypes.BackendPositionMode
 export type BackendCapabilities = AnimationBackendTypes.BackendCapabilities
 export type BackendDebugTrack = AnimationBackendTypes.BackendDebugTrack
 export type BackendDebugSnapshot = AnimationBackendTypes.BackendDebugSnapshot

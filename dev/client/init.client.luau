@@ -13,6 +13,7 @@ local DUMMY_NAME = "AnimGraphR6Dummy"
 local DUMMY_POSITION = Vector3.new(0, 1000, 0)
 local DUMMY_PIVOT = CFrame.new(DUMMY_POSITION)
 local LIFECYCLE_TRACK_KEY = "dev/action/lifecycle"
+local BACKEND_POSITION_MODE: AnimGraph.BackendPositionMode = "nativeRate"
 
 type Layer = "base" | "action"
 type State = "empty" | "locomotion" | "idle" | "walk" | "jump" | "wave" | "cheer" | "dance"
@@ -102,8 +103,8 @@ local sequenceToken = 0
 local activeSequenceName = "none"
 local baseLogicalPosition = 0
 local actionLogicalPosition = 0
-local lastBaseSampleTime: number? = nil
-local lastActionSampleTime: number? = nil
+local baseLogicalAnchorTime = os.clock()
+local actionLogicalAnchorTime = baseLogicalAnchorTime
 local baseLogicalHeld = false
 local actionLogicalHeld = false
 
@@ -248,30 +249,27 @@ local function updateSummary(): ()
 	)
 end
 
-local function sampleLogicalPosition(time: number, layer: Layer): number
+local function sampleLogicalTime(time: number, layer: Layer): AnimGraph.LogicalTimeSample
 	if layer == "base" then
-		local previous = lastBaseSampleTime
-		lastBaseSampleTime = time
-		if previous ~= nil and not baseLogicalHeld then
-			baseLogicalPosition += math.max(time - previous, 0)
-		end
-		return baseLogicalPosition
+		return {
+			position = baseLogicalPosition + (if baseLogicalHeld then 0 else math.max(time - baseLogicalAnchorTime, 0)),
+			addressRevision = 0,
+		}
 	end
 
-	local previous = lastActionSampleTime
-	lastActionSampleTime = time
-	if previous ~= nil and not actionLogicalHeld then
-		actionLogicalPosition += math.max(time - previous, 0)
-	end
-	return actionLogicalPosition
+	return {
+		position = actionLogicalPosition
+			+ (if actionLogicalHeld then 0 else math.max(time - actionLogicalAnchorTime, 0)),
+		addressRevision = 0,
+	}
 end
 
-local function baseLogicalPositionReader(time: number): number
-	return sampleLogicalPosition(time, "base")
+local function baseLogicalTimeReader(time: number): AnimGraph.LogicalTimeSample
+	return sampleLogicalTime(time, "base")
 end
 
-local function actionLogicalPositionReader(time: number): number
-	return sampleLogicalPosition(time, "action")
+local function actionLogicalTimeReader(time: number): AnimGraph.LogicalTimeSample
+	return sampleLogicalTime(time, "action")
 end
 
 local function getController(): AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
@@ -533,9 +531,14 @@ local function restartAction(): ()
 end
 
 local function setLogicalHeld(layer: Layer, held: boolean): ()
+	local sampleTime = os.clock()
 	if layer == "base" then
+		baseLogicalPosition = sampleLogicalTime(sampleTime, "base").position
+		baseLogicalAnchorTime = sampleTime
 		baseLogicalHeld = held
 	else
+		actionLogicalPosition = sampleLogicalTime(sampleTime, "action").position
+		actionLogicalAnchorTime = sampleTime
 		actionLogicalHeld = held
 	end
 	appendLog(tostring(layer) .. " logical reader = " .. (if held then "held" else "advancing"))
@@ -561,7 +564,7 @@ local function playLifecycleClip(
 		fadeTime = 0.6,
 		forceRestart = forceRestart == true,
 		initialPosition = initialPosition,
-		logicalPositionReader = actionLogicalPositionReader,
+		logicalTimeReader = actionLogicalTimeReader,
 	})
 	appendLog(
 		"lifecycle play clip="
@@ -693,10 +696,10 @@ local function runColdZeroToReverse(): ()
 	setActionPlaybackRate(0)
 	playLifecycleClip("wave", false, true, CP_AG_R_UPPER)
 	local activeController = getController()
-	activeController:update()
+	activeController:update(os.clock())
 	dumpNativeTrackStates("cold 0-to-negative after Play(0)")
 	setActionPlaybackRate(-1)
-	activeController:update()
+	activeController:update(os.clock())
 	dumpNativeTrackStates("cold 0-to-negative after desired speed -1")
 end
 
@@ -705,7 +708,7 @@ local function runColdOffsetQueue(): ()
 	setActionPlaybackRate(0)
 	playLifecycleClip("cheer", false, true, { kind = "normalized", value = 0.25 })
 	local activeController = getController()
-	activeController:update()
+	activeController:update(os.clock())
 	offsetLifecyclePosition(0.5, "cold +0.5")
 	offsetLifecyclePosition(-0.25, "cold -0.25")
 	dumpNativeTrackStates("cold relative queue before Length resolution")
@@ -716,7 +719,7 @@ local function runColdReverseOffsetQueue(): ()
 	setActionPlaybackRate(-1)
 	playLifecycleClip("dance", false, true, CP_AG_R_UPPER)
 	local activeController = getController()
-	activeController:update()
+	activeController:update(os.clock())
 	offsetLifecyclePosition(-0.5, "cold reverse -0.5")
 	offsetLifecyclePosition(0.1, "cold reverse +0.1")
 	dumpNativeTrackStates("cold reverse relative queue before Length resolution")
@@ -820,8 +823,8 @@ local function resetHarnessState(): ()
 	activeActionClip = "wave"
 	baseLogicalPosition = 0
 	actionLogicalPosition = 0
-	lastBaseSampleTime = nil
-	lastActionSampleTime = nil
+	baseLogicalAnchorTime = os.clock()
+	actionLogicalAnchorTime = baseLogicalAnchorTime
 	baseLogicalHeld = false
 	actionLogicalHeld = false
 	replayControllerGraphs()
@@ -1974,6 +1977,7 @@ local function setupController(animator: Animator): ()
 	connectNativeEvidence(animator)
 	local backend: AnimGraph.RobloxAnimatorBackend<Layer, State, Clip> = AnimGraph.robloxAnimatorBackend.new({
 		animator = animator,
+		positionMode = BACKEND_POSITION_MODE,
 		resolveAssetId = function(clip: Clip): number
 			local assetId = ANIMATION_IDS[clip]
 			assert(assetId ~= nil, "missing dev animation id for clip " .. tostring(clip))
@@ -2001,14 +2005,13 @@ local function setupController(animator: Animator): ()
 			layerBackend = makeRobloxLayerBackend(actionRobloxPriority),
 			defaultFadeIn = 0.05,
 			defaultFadeOut = 0.12,
-			logicalPositionReader = actionLogicalPositionReader,
+			logicalTimeReader = actionLogicalTimeReader,
 		},
 	}
 
 	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 		backend = backend,
-		timeSource = os.clock,
-		logicalPositionReader = baseLogicalPositionReader,
+		logicalTimeReader = baseLogicalTimeReader,
 		layers = layerDefinitions,
 	}
 
@@ -2055,7 +2058,7 @@ local function setupController(animator: Animator): ()
 	replayControllerGraphs()
 
 	local updateConnection = RunService.PreAnimation:Connect(function()
-		activeController:update()
+		activeController:update(os.clock())
 	end)
 	releaseUpdate = function()
 		updateConnection:Disconnect()

@@ -28,7 +28,7 @@ mode after the run.
    and confirm one completion, no recursion/errors, and no leaked generations.
 9. Hold action logical time while base advances; confirm action native speed can
    be `0.5`, base remains `1.0`, and native fade progresses while action logical
-   delta is zero.
+   phase is held.
 10. Compose blend and transition weights without restarting generations.
 11. Pivot live native speed across positive, zero, and negative in the interior
     and at exact boundaries. Confirm one unchanged track/generation, only changed
@@ -36,6 +36,45 @@ mode after the run.
     boundary pivot. This does not claim continuous reverse graph traversal.
 12. Seek across a named marker and then play continuously across it; record the
     absence/presence of marker events for deferred marker design.
+
+## Absolute-time and sampled-position gate
+
+This new gate is not yet operator-accepted. Run the harness once with
+`BACKEND_POSITION_MODE = "nativeRate"` and once with
+`"sampledPosition"`, using the same owned clips and rig.
+
+1. Confirm both strategies receive one controller coordinate per
+   `PreAnimation` update and graph transitions progress identically.
+2. Hold one reader while another advances. Confirm only the advancing layer's
+   logical transition progresses; changing signed physical speed does not
+   rewind or scale either state machine.
+3. Queue a parameter or weight change and evaluate twice at the same coordinate.
+   Confirm the second evaluation observes the command while transition progress
+   remains unchanged.
+4. In `nativeRate`, confirm unchanged updates do not write `TimePosition` and
+   signed speed continues through `Play`/`AdjustSpeed`.
+5. In `sampledPosition`, confirm `Play` uses speed zero, `AdjustSpeed` is not
+   used for phase, and each successful update writes the anchor-derived
+   `TimePosition`.
+6. Pivot sampled speed positive to negative at one coordinate. Confirm position
+   is continuous at the pivot, then moves backward from the rebased anchor.
+7. Confirm sampled looping wraps, non-looping outward boundaries complete once,
+   and inward/zero boundary cases remain active.
+8. Start sampled playback while `Length == 0`, change speed before resolution,
+   then allow length to resolve. Confirm elapsed phase was retained and exactly
+   one resolved address is applied without generation replacement.
+9. Issue synchronous absolute and relative position commands between updates.
+   Confirm each applies to the active generation immediately, an equal-
+   coordinate update holds it, and later coordinates advance from the new
+   physical anchor.
+10. Stop/restart a sampled native track externally or through lifecycle
+    controls. Confirm native stop does not falsely complete an active sampled
+    generation, while explicit retirement still fades and cleans once.
+11. Record Roblox weight/fade behavior in sampled mode. Position determinism
+    must not be reported as deterministic fade timing.
+12. Record marker, keyframe-event, root-motion, and pose behavior under sampled
+    `TimePosition` writes. Any difference from native playback is a consumer
+    integration constraint, not evidence to silently emulate native signals.
 
 ## CP-AG-P operator acceptance
 

@@ -17,4 +17,4 @@ local strafe = AnimGraph.blend2D("moveX", "moveY", {
 ```
 
 The node limits participating samples with `maxInfluences` and scales child
-request weights without changing logical delta or native speed domains.
+request weights without changing logical-position or physical-speed domains.

@@ -7,6 +7,7 @@ local suites = {
 	process.cwd .. "/tests/lune/smoke.spec.luau",
 	process.cwd .. "/tests/lune/controller.spec.luau",
 	process.cwd .. "/tests/lune/robloxAnimatorBackend.spec.luau",
+	process.cwd .. "/tests/lune/sampledRobloxAnimatorBackend.spec.luau",
 }
 
 local testCount = 0

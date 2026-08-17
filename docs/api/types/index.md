@@ -7,8 +7,8 @@ namespace instead of requiring implementation modules.
 ## Shared Definitions
 
 - `AnimationPosition`
-- `TimeSource`
-- `LogicalPositionReader`
+- `LogicalTimeSample`
+- `LogicalTimeReader`
 - `Release`
 - `TrackCompletedEvent<LayerT, StateT>`
 
@@ -56,6 +56,7 @@ re-exported as root consumer types.
 ## Backends
 
 - `AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>`
+- `BackendPositionMode`
 - `BackendCapabilities`
 - `BackendDebugSnapshot`
 - `AssetId`

@@ -5,6 +5,7 @@ Source: `src/animGraph/backends/robloxAnimatorBackend/init.luau`
 ```luau
 local backend = AnimGraph.robloxAnimatorBackend.new({
 	animator = animator,
+	positionMode = "nativeRate",
 	resolveAssetId = function(clip: Clip): number
 		return animationIds[clip]
 	end,
@@ -12,142 +13,110 @@ local backend = AnimGraph.robloxAnimatorBackend.new({
 })
 ```
 
-The backend maps caller clip identities to positive Roblox asset ids and applies
-backend-neutral request batches to `AnimationTrack` objects. It implements
-`apply(requests)`, `setTrackPosition`, `offsetTrackPosition`,
-`bindToTrackCompleted`, `stopLayer`, `clear`, `destroy`, `getCapabilities`, and
-`getDebugSnapshot`.
+`positionMode` is optional and defaults to `nativeRate`. The resolved strategy
+is fixed for the backend's lifetime and is reported by
+`getCapabilities().positionMode`.
 
-## Batch Contract
+The backend implements `apply(sampleTime, requests)`, synchronous absolute and
+relative positioning, completion binding, layer stop, clear/destroy, capability
+reporting, and debug snapshots.
 
-The entire batch is validated before track loading or mutation. Duplicate
-`trackKey` values or invalid initial positions reject the whole batch. The
-backend repeats this validation for direct users even though the controller also
-validates assembled batches.
+## Coordinate and batch contract
 
-## Initial Position
+`sampleTime` must be finite and cannot move backward from the backend's last
+accepted coordinate. Equal values are valid. The controller passes the same
+coordinate it used for graph evaluation.
 
-An initial position remains pending until the track has positive finite length,
-then applies once after `Play`:
+The entire request batch is validated before track loading. Duplicate keys,
+invalid positions, non-finite weight/speed/priority/fade, or negative fade
+reject before materialization. Direct backend users receive the same checks as
+controller users.
 
-- non-looping seconds clamp to `[0, Length]`;
-- non-looping normalized values map to the same inclusive interval;
-- looping seconds wrap modulo length;
-- looping normalized `1` canonicalizes to zero.
+## Position strategies
 
-Non-looping boundary classification uses the request's desired signed speed:
+```luau
+export type BackendPositionMode =
+	"nativeRate"
+	| "sampledPosition"
+```
 
-| Resolved position | Desired speed | Result |
+### nativeRate
+
+Roblox advances physical phase. A new generation calls `Play` with desired
+signed speed; later speed changes use `AdjustSpeed`. Unchanged requests do not
+replay, seek, rewrite position, or churn native properties.
+
+Initial position is a one-shot generation instruction. If length is unknown,
+it remains pending. Reverse starts hold native rate at zero only when required
+to place an unresolved upper position safely, then adopt the retained negative
+speed after the write.
+
+### sampledPosition
+
+The backend advances physical phase from anchors while Roblox runs at native
+rate zero:
+
+```luau
+position = positionAnchor + speed * (sampleTime - sampleTimeAnchor)
+```
+
+It wraps looping positions and clamps non-looping positions on every apply.
+Before speed or loop policy changes, it samples with the old values and rebases
+the anchors, then adopts the new request. A positive length is required for the
+physical write, but elapsed anchor-relative phase continues to accrue while
+length is unresolved.
+
+Roblox still owns weight interpolation, fades, asset loading, and final pose
+application. `sampledPosition` makes physical position sampling deterministic;
+it does not make all Roblox animation behavior deterministic. Marker, keyframe-
+event, and root-motion behavior under per-update `TimePosition` writes requires
+consumer-specific Studio verification.
+
+## Absolute and relative positioning
+
+`setTrackPosition(trackKey, position)` and
+`offsetTrackPosition(trackKey, deltaSeconds)` address only the current active
+generation. They return `true` for an accepted command even if unknown length
+delays the write, and `false` for missing, retiring, completed, stale, or
+destroyed targets.
+
+In native mode these commands preserve the existing generation and desired
+native rate. In sampled mode they synchronously write when possible and rebase
+physical phase at the backend's last accepted coordinate. The next apply at
+that same coordinate holds the explicit position; later coordinates advance
+from it.
+
+Pending absolute and relative commands remain generation-local. A later
+absolute command supersedes earlier offsets; later offsets compose from the new
+base. Looping addresses wrap. Non-looping addresses clamp and complete only
+when desired signed speed points outward.
+
+| Boundary | Desired speed | Result |
 | --- | --- | --- |
-| `Length` | positive | completed |
-| `Length` | negative | active, moving inward |
-| `0` | negative | completed |
-| `0` | positive | active, moving inward |
-| either boundary | zero | active, held |
-| interior | any finite value | active |
+| upper | positive | completed |
+| upper | zero or negative | active |
+| lower | negative | completed |
+| lower | zero or positive | active |
+| looping boundary | any finite speed | wraps, active |
 
-For a known-length reverse start, `Play` receives the desired negative speed
-before the exact upper position is written. For an unknown-length reverse start,
-`Play` receives `0`; the backend retains the desired negative speed, waits for a
-positive length, writes the requested upper position exactly once, and then
-calls `AdjustSpeed` with the retained value. It does not replay, replace, or
-change generation during resolution.
+## Generations and completion
 
-`forceRestart` creates a new internal materialization generation. An explicit
-`initialPosition` wins; without one, the new generation starts at zero.
-
-## Absolute and Relative Position
-
-`setTrackPosition(trackKey, position)` validates before mutation and addresses
-only the active physical generation for the key. A valid command returns
-`true`, including when it replaces a pending initial position while length is
-zero. Missing, retiring, completed, and destroyed keys return `false` and load
-nothing.
-
-Forward and backward positions preserve generation, clip, loop setting, speed,
-weight target, priority, and completion subscription. Non-looping exact or
-beyond-upper positions clamp to `Length`; lower and upper completion follows the
-same desired-speed table as initial placement. Looping seconds wrap modulo length
-and normalized `1` canonicalizes to zero without completion.
-
-A live speed change uses only `AdjustSpeed`. It does not seek, call `Play`, change
-the key, or replace the generation. At an exact non-looping boundary an outward
-pivot completes once; an inward or zero pivot remains active.
-
-`offsetTrackPosition(trackKey, deltaSeconds)` accepts only finite signed
-seconds. Each supplied delta and the accumulated unresolved offset must remain
-finite and representable; cumulative overflow raises before pending state,
-native playback, or lifecycle mutation and preserves the previous valid sum.
-The method returns `true` when the current active generation accepts the command,
-including when `Length == 0` delays the physical write. It returns `false` for a
-missing, retiring, completed, cleaned, stale, or destroyed target.
-It exposes no position getter or raw `AnimationTrack`.
-
-With positive length, the method performs one generation-bound physical
-read/modify/write. Looping sums wrap modulo length and never complete;
-non-looping sums clamp to `[0, Length]`. Terminal classification uses the
-playback's final desired signed speed, not offset sign or a temporary native
-zero: zero holds either boundary, inward remains active, and outward completes
-once after committed position/lifecycle state.
-
-With unresolved length, accepted offsets accumulate separately from the pending
-absolute initial/live position. A pending absolute address becomes the base;
-without one, the backend observes physical `TimePosition` when length resolves.
-It adds the ordered offset sum, wraps/clamps once, and performs exactly one final
-write. `setTrackPosition` supersedes offsets issued before it, while later
-offsets compose from that absolute base. For an unresolved reverse start, native
-speed remains zero until the combined position write, then the retained desired
-negative speed is applied without replay or generation replacement.
-
-## Idempotence
-
-For unchanged native desired state, repeated `apply` calls do not reload, replay,
-rewrite position, churn an internal generation, adjust weight/speed, rewrite
-loop/priority, or restart a fade. A delta-only request change remains visible to
-custom backends but has no native Roblox operation. Resolving one pending
-absolute/relative address after length becomes available is the only permitted
-position change during an otherwise unchanged apply. The combined address and
-accumulated offsets are consumed once. A held pending reverse start also applies
-its retained speed once after that position write.
-
-## Generations and Completion
-
-The backend keeps three distinct ownership sets:
+The shared backend manager owns:
 
 - one active generation per `trackKey`;
 - retiring physical generations keyed by generation token;
 - lightweight completed tombstones keyed by `trackKey`.
 
-A tombstone retains only key, clip, layer/state, and generation identity. It
-retains no `AnimationTrack`, `Animation`, or signal connection. The unchanged
-request keeps the tombstone and cannot replay. A validated omission, different
-clip, `forceRestart`, `clear`, or `destroy` retires it according to the public
-contract.
+Native mode classifies natural `Stopped`/`Ended` behavior. Sampled mode
+classifies completion from sampled non-looping phase and ignores native stop
+signals while its active zero-rate generation remains owned. Both modes commit
+the tombstone before dispatching `trackCompleted`; sampled completion cleans its
+otherwise-frozen zero-rate physical track immediately.
 
-`bindToTrackCompleted(callback)` observes natural non-looping forward completion
-at the upper end, natural reverse completion at the lower end, and accepted
-initial/live outward boundary placement. Completion is latched before dispatch
-and fires once. Explicit stop, request disappearance, replacement, restart
-retirement, clear, and destroy suppress completion. Dispatch snapshots listeners,
-so callbacks may synchronously mutate playback, absolute/relative positioning,
-lifecycle, or subscriptions. Per-generation pending offsets are discarded on
-completion, retirement, cleanup, replacement, clear, and destroy.
+Explicit stop, request omission, replacement retirement, restart retirement,
+clear, and destroy suppress natural completion. Listener snapshots permit
+re-entrant commands. Non-zero retirement fades keep physical generations until
+`Ended`; zero-fade or inactive retirement cleans immediately.
 
-## Fade Retirement and Cleanup
-
-Explicit retirement invalidates `Stopped` classification before
-`AnimationTrack:Stop(fadeTime)`. Normal request disappearance uses the backend
-default fade. `stopLayer` uses its explicit fade or the backend default;
-controller calls supply the resolved layer default. Same-key replacement and
-`forceRestart` use the incoming request fade. Clear and destroy are immediate
-zero-fade boundaries.
-
-The active key slot is released when retirement begins, allowing a new same-key
-generation while old physics fades. `Ended` owns final connection, track, and
-animation cleanup after non-zero fade. Zero-fade and already-inactive retirement
-clean immediately. Captured generation tokens make delayed `Stopped` or `Ended`
-callbacks harmless to newer generations.
-
-Debug snapshots report `generation`, `lifecycle` (`active`, `retiring`, or
-`completed`), and `physicalPresent` in each track's `details` table without
-exposing raw Roblox objects.
+Debug track details include `positionMode`, `generation`, `lifecycle`, and
+`physicalPresent` without exposing raw Roblox objects.

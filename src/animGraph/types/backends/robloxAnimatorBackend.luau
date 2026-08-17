@@ -20,6 +20,7 @@ export type LogicalPriorityBand = {
 export type RobloxAnimatorBackendConfig<ClipT> = {
 	animator: Animator,
 	resolveAssetId: (clip: ClipT) -> AssetId,
+	positionMode: AnimationBackendTypes.BackendPositionMode?,
 	defaultFadeOut: number?,
 	defaultPriority: Enum.AnimationPriority?,
 	priorityBands: { LogicalPriorityBand }?,
@@ -43,6 +44,9 @@ export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
 		_defaultFadeOut: number,
 		_defaultPriority: Enum.AnimationPriority,
 		_priorityBands: { LogicalPriorityBand },
+		_positionMode: AnimationBackendTypes.BackendPositionMode,
+		_capabilities: AnimationBackendTypes.BackendCapabilities,
+		_lastSampleTime: number?,
 		_active: { [string]: any },
 		_physical: { [number]: any },
 		_retiring: { [number]: any },
@@ -61,6 +65,7 @@ export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
 		) -> Enum.AnimationPriority,
 		_materialize: (
 			self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+			sampleTime: number,
 			request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
 			robloxPriority: Enum.AnimationPriority
 		) -> any,

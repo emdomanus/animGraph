@@ -11,8 +11,7 @@ local ParameterStoreTypes = require(script.Parent.parameterStore)
 
 export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
-	timeSource: DefTypes.TimeSource,
-	logicalPositionReader: DefTypes.LogicalPositionReader,
+	logicalTimeReader: DefTypes.LogicalTimeReader,
 	layers: { LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT> }?,
 }
 
@@ -21,6 +20,24 @@ export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBacken
 	layers: { LayerRuntimeTypes.LayerDebugSnapshot<LayerT, StateT, LayerBackendT> },
 	backend: BackendTypes.BackendDebugSnapshot,
 }
+
+export type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
+	{
+		kind: "play",
+		layer: LayerT,
+		motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?,
+	}
+	| { kind: "stop", layer: LayerT, fadeTime: number }
+	| { kind: "setLayerWeight", layer: LayerT, weight: number }
+	| { kind: "setLayerSpeed", layer: LayerT, speed: number }
+	| { kind: "setLayerLogicalPriority", layer: LayerT, logicalPriority: number }
+	| { kind: "setLayerBackend", layer: LayerT, layerBackend: LayerBackendT? }
+	| { kind: "setDefaultLogicalTimeReader", reader: DefTypes.LogicalTimeReader }
+	| { kind: "setLayerLogicalTimeReader", layer: LayerT, reader: DefTypes.LogicalTimeReader? }
+	| { kind: "setActivePlayLogicalTimeReader", layer: LayerT, reader: DefTypes.LogicalTimeReader? }
+	| { kind: "setParameter", parameter: ParamT, value: ParameterStoreTypes.ParameterValue }
+	| { kind: "setTrigger", parameter: ParamT }
 
 export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	addLayer: (
@@ -85,6 +102,20 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT
 	) -> LayerBackendT?,
+	setDefaultLogicalTimeReader: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		reader: DefTypes.LogicalTimeReader
+	) -> (),
+	setLayerLogicalTimeReader: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
+		reader: DefTypes.LogicalTimeReader?
+	) -> (),
+	setActivePlayLogicalTimeReader: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
+		reader: DefTypes.LogicalTimeReader?
+	) -> (),
 
 	setParameter: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
@@ -126,7 +157,7 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 		callback: EventBusTypes.AnimationEventCallback<LayerT, StateT>
 	) -> EventBusTypes.Release,
 
-	update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
+	update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, sampleTime: number) -> (),
 	clear: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
 	destroy: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
 	getDebugSnapshot: (
@@ -137,8 +168,9 @@ export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = 
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> & {
 		_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
-		_timeSource: DefTypes.TimeSource,
-		_logicalPositionReader: DefTypes.LogicalPositionReader,
+		_logicalTimeReader: DefTypes.LogicalTimeReader,
+		_lastSampleTime: number?,
+		_pendingCommands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
 		_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
 		_layerOrder: { LayerT },
 		_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,

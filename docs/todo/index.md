@@ -1,9 +1,11 @@
 # Engineering TODOs
 
-- [Temporal amendment](/todo/temporalAmendment) — completed sampled-timing and
-  backend-lifecycle design evidence, including CP-TA3 closure.
+- [Absolute-time amendment](/todo/temporalAmendment) — implemented explicit
+  coordinates, logical phase rebasing, command staging, and dual backend
+  position strategies.
 - [Backlog](/todo/backlog) — genuinely deferred work not included in the
   completed checkpoint.
 
-CP-TA1, CP-TA2, and CP-TA3 are complete and operator-reviewed. VoxelMMO
-consumer proofs and release decisions remain separate.
+The earlier CP-TA1 through CP-TA3 native lifecycle work remains complete. The
+new deterministic/static migration is complete; sampled-position Studio
+evidence, VoxelMMO consumer work, and release decisions remain separate.

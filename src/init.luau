@@ -8,8 +8,8 @@ local Types = require(script.animGraph.types)
 export type Release = Types.Release
 export type AssetId = Types.AssetId
 export type AnimationPosition = Types.AnimationPosition
-export type TimeSource = Types.TimeSource
-export type LogicalPositionReader = Types.LogicalPositionReader
+export type LogicalTimeSample = Types.LogicalTimeSample
+export type LogicalTimeReader = Types.LogicalTimeReader
 export type TrackCompletedEvent<LayerT, StateT> = Types.TrackCompletedEvent<LayerT, StateT>
 export type ParameterValue = Types.ParameterValue
 export type AnimationEventName = Types.AnimationEventName
@@ -56,6 +56,7 @@ export type StateMachineRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	Types.StateMachineRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> =
 	Types.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>
+export type BackendPositionMode = Types.BackendPositionMode
 export type BackendCapabilities = Types.BackendCapabilities
 export type BackendDebugSnapshot = Types.BackendDebugSnapshot
 export type LogicalPriorityBand = Types.LogicalPriorityBand

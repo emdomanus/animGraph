@@ -1,7 +1,7 @@
 # Getting Started
 
-Construct a backend, provide one time source and one default logical-position
-reader, declare layers, and schedule `update()` from caller-owned code.
+Construct a backend, provide a default logical-time reader, declare layers, and
+pass an explicit coordinate from caller-owned scheduling.
 
 ```luau
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,17 +17,22 @@ type LayerBackend = AnimGraph.RobloxLayerBackend
 
 local backend = AnimGraph.robloxAnimatorBackend.new({
 	animator = animator,
+	positionMode = "nativeRate",
 	resolveAssetId = function(clip: Clip): number
 		return animationIds[clip]
 	end,
 })
 
+local worldReader: AnimGraph.LogicalTimeReader = function(sampleTime: number): AnimGraph.LogicalTimeSample
+	return {
+		position = sampleTime,
+		addressRevision = 0,
+	}
+end
+
 local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
 	backend = backend,
-	timeSource = os.clock,
-	logicalPositionReader = function(time: number): number
-		return time
-	end,
+	logicalTimeReader = worldReader,
 	layers = {
 		{ id = "base", logicalPriority = 0 },
 		{ id = "action", logicalPriority = 100 },
@@ -43,11 +48,10 @@ controller:play("base", AnimGraph.blend1D("speed", {
 	state = "locomotion",
 	looped = true,
 })
-
 controller:setFloat("speed", 4)
 
 local updateConnection = RunService.PreAnimation:Connect(function()
-	controller:update()
+	controller:update(os.clock())
 end)
 
 -- later
@@ -55,23 +59,40 @@ updateConnection:Disconnect()
 controller:destroy()
 ```
 
-`time` is the one shared time sampled for the update, not an AnimGraph clock or
-timescale. A consumer may replace the default reader on a layer definition or
-one active play:
+`play` and the parameter write above are queued until the first `update`.
+Calling `update` again with the same coordinate can apply new commands without
+advancing transition progress.
+
+## Reader scopes
+
+A layer or active play can override the controller reader:
 
 ```luau
 controller:play("action", AnimGraph.clip("slash"), {
 	state = "attack",
-	logicalPositionReader = actionReader,
+	logicalTimeReader = actionReader,
 })
 ```
 
-The play reader replaces the layer reader; the layer reader replaces the
-controller default. Values are never multiplied through that chain.
+The active-play reader replaces the layer reader; the layer reader replaces the
+controller default. Runtime changes are also available through
+`setDefaultLogicalTimeReader`, `setLayerLogicalTimeReader`, and
+`setActivePlayLogicalTimeReader`. Reader changes take effect on the next update
+and hold/rebase existing logical phase.
 
-## Initial Position
+Return a new `addressRevision` only for discontinuous re-addressing. Continuous
+rate changes keep the revision stable.
 
-Use one discriminated `initialPosition`. There are no numeric aliases:
+## Backend mode
+
+Choose `nativeRate` when Roblox should advance tracks through native signed
+speed. Choose `sampledPosition` when the backend should derive and write
+physical position from each `sampleTime`. This is one fixed backend strategy,
+not a layer or content option; graph semantics are identical in both modes.
+
+## Initial and live position
+
+Use the discriminated `initialPosition` union for one-shot materialization:
 
 ```luau
 controller:play("action", AnimGraph.clip("slash"), {
@@ -79,6 +100,5 @@ controller:play("action", AnimGraph.clip("slash"), {
 })
 ```
 
-Seconds must be finite and non-negative. Normalized values must be finite and in
-the inclusive interval `[0, 1]`. Initial position is a one-shot materialization
-instruction, not a live seek operation.
+Use synchronous `setTrackPosition` or `offsetTrackPosition` after a generation
+exists. Those physical commands do not change logical graph phase.

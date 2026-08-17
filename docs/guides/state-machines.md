@@ -27,9 +27,11 @@ controller:play("action", action)
 controller:setTrigger("attack")
 ```
 
-Transition progress uses `MotionEvaluateContext.dt`, which is the exact forward
-difference from the active play's selected logical reader. The first or held
-sample contributes zero. Layer and request speed do not scale transition time.
+Transition progress uses an absolute `MotionEvaluateContext.logicalPosition`
+anchor. A transition stores the position at which it starts and derives elapsed
+as `currentPosition - startPosition`. First, held, backward-reader, revision,
+and equal-coordinate samples hold progress. Layer and request speed do not
+scale or rewind transition time.
 
 Supported condition operators are `==`, `~=`, `>`, `>=`, `<`, `<=`, `truthy`,
 `falsy`, and `trigger`. Trigger conditions consume the trigger. Create a

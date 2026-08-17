@@ -22,7 +22,8 @@ TransitionRuntime.__index = TransitionRuntime
 
 function TransitionRuntime.new<StateT, ParamT>(
 	definition: TransitionDefinition<StateT, ParamT>,
-	fromState: StateT
+	fromState: StateT,
+	startPosition: number
 ): TransitionRuntime<StateT, ParamT>
 	local duration = math.max(optionNumber(definition.duration, DEFAULT_DURATION), 0)
 	local self: TransitionRuntimeImpl<StateT, ParamT> = setmetatable({}, TransitionRuntime) :: any
@@ -31,16 +32,17 @@ function TransitionRuntime.new<StateT, ParamT>(
 	self._fromState = fromState
 	self._toState = definition.to
 	self._duration = duration
-	self._elapsed = if duration <= 0 then duration else 0
+	self._startPosition = startPosition
+	self._logicalPosition = startPosition
 
 	return self
 end
 
 function TransitionRuntime.update<StateT, ParamT>(
 	self: TransitionRuntimeImpl<StateT, ParamT>,
-	dt: number
+	logicalPosition: number
 ): ()
-	self._elapsed = math.min(self._elapsed + math.max(dt, 0), self._duration)
+	self._logicalPosition = logicalPosition
 end
 
 function TransitionRuntime.getAlpha<StateT, ParamT>(
@@ -50,7 +52,7 @@ function TransitionRuntime.getAlpha<StateT, ParamT>(
 		return 1
 	end
 
-	return math.clamp(self._elapsed / self._duration, 0, 1)
+	return math.clamp((self._logicalPosition - self._startPosition) / self._duration, 0, 1)
 end
 
 function TransitionRuntime.isComplete<StateT, ParamT>(
@@ -67,7 +69,7 @@ function TransitionRuntime.getDebugSnapshot<StateT, ParamT>(
 		fromState = self._fromState,
 		toState = self._toState,
 		duration = self._duration,
-		elapsed = self._elapsed,
+		elapsed = math.clamp(self._logicalPosition - self._startPosition, 0, self._duration),
 		progress = self:getAlpha(),
 	}
 end

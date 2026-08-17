@@ -7,6 +7,11 @@ local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 
 local RequestValidation = {}
 
+local function assertFinite(value: number, name: string): ()
+	assert(typeof(value) == "number", name .. " must be a number")
+	assert(value == value and value > -math.huge and value < math.huge, name .. " must be finite")
+end
+
 function RequestValidation.validate<LayerT, StateT, ClipT, LayerBackendT>(
 	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
 ): ()
@@ -15,6 +20,11 @@ function RequestValidation.validate<LayerT, StateT, ClipT, LayerBackendT>(
 	for _, request in requests do
 		assert(seenTrackKeys[request.trackKey] == nil, "duplicate trackKey in request batch: " .. request.trackKey)
 		seenTrackKeys[request.trackKey] = true
+		assertFinite(request.weight, "request weight")
+		assertFinite(request.speed, "request speed")
+		assertFinite(request.logicalPriority, "request logicalPriority")
+		assertFinite(request.fadeTime, "request fadeTime")
+		assert(request.fadeTime >= 0, "request fadeTime must be non-negative")
 
 		if request.initialPosition ~= nil then
 			AnimationPosition.assertValid(request.initialPosition)

@@ -6,17 +6,19 @@ blend, priority, state-machine, sequence, console, and debug controls.
 ```sh
 rojo serve dev.project.json
 ```
-Connect a blank Roblox Studio place and press Play. The harness constructs the
-controller with `os.clock` as `TimeSource` and an identity default
-`LogicalPositionReader`, then owns this update connection:
+Connect a blank Roblox Studio place and press Play. The harness passes
+`os.clock()` explicitly and uses anchor-based `LogicalTimeReader` functions,
+then owns this update connection:
 
 ```luau
 local updateConnection = RunService.PreAnimation:Connect(function()
-	controller:update()
+	controller:update(os.clock())
 end)
 ```
 
-There is no controller-owned frame connection and no delta argument. The
+There is no controller-owned frame connection and no delta argument. Change the
+typed `BACKEND_POSITION_MODE` constant between `nativeRate` and
+`sampledPosition` before serving to exercise either fixed backend strategy. The
 Temporal Lifecycle controls independently hold or advance the base and action
 readers while leaving native speed controls separate.
 
