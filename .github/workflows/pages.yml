@@ -34,6 +34,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install D2 v0.7.1
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/d2lang/d2/releases/download/v0.7.1/d2-v0.7.1-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/d2.tar.gz"
+          echo "eb172adf59f38d1e5a70ab177591356754ffaf9bebb84e0ca8b767dfb421dad7  $RUNNER_TEMP/d2.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/d2.tar.gz" -C "$RUNNER_TEMP" d2-v0.7.1/bin/d2
+          echo "$RUNNER_TEMP/d2-v0.7.1/bin" >> "$GITHUB_PATH"
+          test "$("$RUNNER_TEMP/d2-v0.7.1/bin/d2" version)" = "v0.7.1"
+
       - name: Build docs
         run: npm run docs:build
         env:
