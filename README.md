@@ -230,13 +230,15 @@ See the [API reference](docs/api/index.md),
 ## Development
 
 ```sh
-lune run tests/lune/run.luau
-stylua --check src dev tests
-selene src dev tests
+pwsh -NoProfile -File scripts/verify/tests.ps1
+pwsh -NoProfile -File scripts/verify/stylua.ps1
+pwsh -NoProfile -File scripts/verify/selene.ps1
 npm run docs:build
 ```
 
-For Roblox-aware analysis and the require graph:
+Install pinned tools with `rokit install` and fetch definitions once with
+`scripts/luau-lsp/fetch-roblox-types.ps1`. For Roblox-aware source/demo analysis
+and accepted public contracts:
 
 ```powershell
 .\scripts\check-luau.ps1
@@ -246,3 +248,17 @@ Run `rojo serve dev.project.json` for the Studio harness. Change its typed
 `BACKEND_POSITION_MODE` constant to exercise either backend strategy. The
 [Studio checklist](docs/guides/studio-verification.md) records the remaining
 engine-only sampled-position gate.
+
+The analyzer uses pinned Luau-LSP 1.70.1 and solver V2, retaining executable identity,
+definitions hash, arguments, and raw diagnostics under ignored `.verification/`.
+`LUAU_LSP_OVERRIDE` accepts an absolute executable of that pinned version; it does
+not replace Rokit shims. Editor solver settings match the command line.
+
+Run `scripts/verify/type-errors.ps1 -OutDir .verification/rejected-fresh` for rejected
+public contracts and `scripts/verify/tooling-tests.ps1` for capture/override fixtures.
+Public method fields are read-only; state-changing methods still work normally.
+Dynamic Roblox doubles are exercised by the 87-case Lune suite rather than treated
+as public type contracts. `scripts/verify/test-harness.ps1` verifies cleanup after
+success/failure, abandoned run recovery, and concurrent isolation. Generated modules
+belong to a unique `.animgraph-tests/<token>/runtime` directory; use the guarded
+runner instead of calling Lune directly. `-KeepRuntime` explicitly retains a run.

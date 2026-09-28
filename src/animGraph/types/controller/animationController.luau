@@ -21,163 +21,198 @@ export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBacken
 	backend: BackendTypes.BackendDebugSnapshot,
 }
 
-export type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	{
-		kind: "play",
-		layer: LayerT,
-		motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-		options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?,
-	}
-	| { kind: "stop", layer: LayerT, fadeTime: number }
-	| { kind: "setLayerWeight", layer: LayerT, weight: number }
-	| { kind: "setLayerSpeed", layer: LayerT, speed: number }
-	| { kind: "setLayerLogicalPriority", layer: LayerT, logicalPriority: number }
-	| { kind: "setLayerBackend", layer: LayerT, layerBackend: LayerBackendT? }
-	| { kind: "setDefaultTimeReader", reader: DefTypes.TimeReader }
-	| { kind: "setLayerTimeReader", layer: LayerT, reader: DefTypes.TimeReader? }
-	| { kind: "setActivePlayTimeReader", layer: LayerT, reader: DefTypes.TimeReader? }
-	| { kind: "setParameter", parameter: ParamT, value: ParameterStoreTypes.ParameterValue }
-	| { kind: "setTrigger", parameter: ParamT }
+export type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
+	kind: "play",
+	layer: LayerT,
+	motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?,
+} | {
+	kind: "stop",
+	layer: LayerT,
+	fadeTime: number,
+} | {
+	kind: "setLayerWeight",
+	layer: LayerT,
+	weight: number,
+} | {
+	kind: "setLayerSpeed",
+	layer: LayerT,
+	speed: number,
+} | {
+	kind: "setLayerLogicalPriority",
+	layer: LayerT,
+	logicalPriority: number,
+} | {
+	kind: "setLayerBackend",
+	layer: LayerT,
+	layerBackend: LayerBackendT?,
+} | {
+	kind: "setDefaultTimeReader",
+	reader: DefTypes.TimeReader,
+} | {
+	kind: "setLayerTimeReader",
+	layer: LayerT,
+	reader: DefTypes.TimeReader?,
+} | {
+	kind: "setActivePlayTimeReader",
+	layer: LayerT,
+	reader: DefTypes.TimeReader?,
+} | {
+	kind: "setParameter",
+	parameter: ParamT,
+	value: ParameterStoreTypes.ParameterValue,
+} | {
+	kind: "setTrigger",
+	parameter: ParamT,
+}
 
 export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
-	addLayer: (
+	read addLayer: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		definition: LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT>
 	) -> (),
-	hasLayer: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, layer: LayerT) -> boolean,
-	play: (
+	read hasLayer: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, layer: LayerT) -> boolean,
+	read play: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?
 	) -> (),
-	setTrackPosition: (
+	read setTrackPosition: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		trackKey: string,
 		position: DefTypes.AnimationPosition
 	) -> boolean,
-	offsetTrackPosition: (
+	read offsetTrackPosition: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		trackKey: string,
 		deltaSeconds: number
 	) -> boolean,
-	stopLayer: (
+	read stopLayer: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		fadeTime: number?
 	) -> (),
-	setLayerWeight: (
+	read setLayerWeight: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		weight: number
 	) -> (),
-	getLayerWeight: (
+	read getLayerWeight: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT
 	) -> number?,
-	setLayerSpeed: (
+	read setLayerSpeed: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		speed: number
 	) -> (),
-	getLayerSpeed: (
+	read getLayerSpeed: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT
 	) -> number?,
-	setLayerLogicalPriority: (
+	read setLayerLogicalPriority: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		logicalPriority: number
 	) -> (),
-	getLayerLogicalPriority: (
+	read getLayerLogicalPriority: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT
 	) -> number?,
-	setLayerBackend: (
+	read setLayerBackend: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		layerBackend: LayerBackendT?
 	) -> (),
-	getLayerBackend: (
+	read getLayerBackend: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT
 	) -> LayerBackendT?,
-	setDefaultTimeReader: (
+	read setDefaultTimeReader: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		reader: DefTypes.TimeReader
 	) -> (),
-	setLayerTimeReader: (
+	read setLayerTimeReader: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		reader: DefTypes.TimeReader?
 	) -> (),
-	setActivePlayTimeReader: (
+	read setActivePlayTimeReader: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		reader: DefTypes.TimeReader?
 	) -> (),
 
-	setParameter: (
+	read setParameter: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT,
 		value: ParameterStoreTypes.ParameterValue
 	) -> (),
-	getParameter: (
+	read getParameter: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT
 	) -> ParameterStoreTypes.ParameterValue?,
-	setFloat: (
+	read setFloat: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT,
 		value: number
 	) -> (),
-	getFloat: (
+	read getFloat: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT,
 		fallback: number?
 	) -> number,
-	setBool: (
+	read setBool: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT,
 		value: boolean
 	) -> (),
-	getBool: (
+	read getBool: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT,
 		fallback: boolean?
 	) -> boolean,
-	setTrigger: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, parameter: ParamT) -> (),
-	consumeTrigger: (
+	read setTrigger: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT
+	) -> (),
+	read consumeTrigger: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		parameter: ParamT
 	) -> boolean,
-	on: (
+	read on: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		name: EventBusTypes.AnimationEventName,
 		callback: EventBusTypes.AnimationEventCallback<LayerT, StateT>
 	) -> EventBusTypes.Release,
 
-	update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, sampleTime: number) -> (),
-	clear: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
-	destroy: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
-	getDebugSnapshot: (
+	read update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, sampleTime: number) -> (),
+	read clear: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
+	read destroy: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
+	read getDebugSnapshot: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 	) -> AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>,
 }
 
-export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> & {
-		_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
-		_timeReader: DefTypes.TimeReader,
-		_lastSampleTime: number?,
-		_pendingCommands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
-		_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
-		_layerOrder: { LayerT },
-		_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
-		_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
-		_releaseBackendCompletion: DefTypes.Release?,
-		_lifecycleEpoch: number,
-		_destroyed: boolean,
-	}
+export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+> & {
+	_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+	_timeReader: DefTypes.TimeReader,
+	_lastSampleTime: number?,
+	_pendingCommands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	_layerOrder: { LayerT },
+	_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
+	_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
+	_releaseBackendCompletion: DefTypes.Release?,
+	_lifecycleEpoch: number,
+	_destroyed: boolean,
+}
 
 return {}

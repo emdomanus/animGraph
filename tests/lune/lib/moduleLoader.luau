@@ -16,6 +16,7 @@ export type LoaderHandle = {
 }
 
 local ModuleLoader = {}
+local runtimeSequence = 0
 
 local function normalizePath(path: string): string
 	return (path:gsub("\\", "/"))
@@ -110,13 +111,14 @@ end
 
 function ModuleLoader.write(options: LoaderOptions): LoaderHandle
 	local sourceRoot = resolveFromCwd(options.sourceRoot)
-	local tempRoot = resolveFromCwd(options.tempDir)
+	local ownedRoot = assert(process.env.ANIMGRAPH_LUNE_RUNTIME, "Run through scripts/verify/tests.ps1")
+	runtimeSequence += 1
+	local label = options.tempDir:gsub("[^%w_-]", "-")
+	local tempRoot = joinPath(ownedRoot, label .. "-" .. tostring(runtimeSequence))
 	local modules = discoverModules(sourceRoot)
 	local moduleSet: { [string]: true } = {}
 
-	if fs.isDir(tempRoot) then
-		fs.removeDir(tempRoot)
-	end
+	assert(not fs.isDir(tempRoot), "owned module runtime must be unique")
 	fs.writeDir(tempRoot)
 
 	for _, relativePath in modules do
@@ -145,9 +147,7 @@ function ModuleLoader.write(options: LoaderOptions): LoaderHandle
 			return requireAny(joinPath(tempRoot, relativePath))
 		end,
 		cleanup = function(): ()
-			if fs.isDir(tempRoot) then
-				fs.removeDir(tempRoot)
-			end
+			-- The guarded runner reclaims this entire owned run in protected cleanup.
 		end,
 	}
 end

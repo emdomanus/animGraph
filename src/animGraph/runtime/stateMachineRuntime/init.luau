@@ -7,14 +7,34 @@ local Types = require(script.Parent.Parent.types.runtime.stateMachineRuntime)
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 local TransitionRuntimeTypes = require(script.Parent.Parent.types.runtime.transitionRuntime)
 
-export type StateDefinition<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.StateDefinition<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type StateMachineConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.StateMachineConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type StateMachineRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.StateMachineRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+export type StateDefinition<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.StateDefinition<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type StateMachineConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.StateMachineConfig<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type StateMachineRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.StateMachineRuntime<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.StateMachineRuntimeImpl<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 
 local StateMachineRuntime = {}
 StateMachineRuntime.__index = StateMachineRuntime
@@ -48,8 +68,17 @@ local function compareValues(left: any, op: TransitionRuntimeTypes.TransitionCon
 end
 
 local function transitionConditionsPass<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	transition: TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT>,
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	transition: TransitionRuntimeTypes.TransitionDefinition<
+		StateT,
+		ParamT
+	>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
 ): boolean
 	local conditions = transition.conditions
 	if conditions == nil or #conditions == 0 then
@@ -75,9 +104,21 @@ local function transitionConditionsPass<LayerT, StateT, ParamT, ClipT, LayerBack
 end
 
 local function copyContextWithState<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	state: StateT
-): MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+): MotionNodeTypes.MotionEvaluateContext<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	return {
 		layer = context.layer,
 		state = state,
@@ -96,9 +137,28 @@ local function copyContextWithState<LayerT, StateT, ParamT, ClipT, LayerBackendT
 end
 
 local function appendStateRequests<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> },
-	state: StateDefinition<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	requests: {
+		MotionNodeTypes.ClipRequest<
+			LayerT,
+			StateT,
+			ClipT,
+			LayerBackendT
+		>
+	},
+	state: StateDefinition<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	weight: number,
 	fadeTime: number
 ): ()
@@ -121,16 +181,34 @@ local function sortTransitions<StateT, ParamT>(
 	transitions: { TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT> }
 ): { TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT> }
 	local sorted = table.clone(transitions)
-	table.sort(sorted, function(left, right)
-		return (left.priority or 0) > (right.priority or 0)
-	end)
+	table.sort(
+		sorted,
+		function(
+			left: TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT>,
+			right: TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT>
+		)
+			return (left.priority or 0) > (right.priority or 0)
+		end
+	)
 
 	return sorted
 end
 
 function StateMachineRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	config: StateMachineConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): StateMachineRuntime<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	config: StateMachineConfig<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): StateMachineRuntime<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	local states: { [StateT]: StateDefinition<LayerT, StateT, ParamT, ClipT, LayerBackendT> } = {}
 	local stateOrder: { StateT } = {}
 	for _, state in config.states do
@@ -140,10 +218,8 @@ function StateMachineRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	end
 	assert(states[config.initialState] ~= nil, "initialState must exist in states")
 
-	local self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = setmetatable(
-		{},
-		StateMachineRuntime
-	) :: any
+	local self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
+		setmetatable({}, StateMachineRuntime) :: any
 	self._name = config.name or "StateMachine"
 	self._initialState = config.initialState
 	self._activeState = config.initialState
@@ -157,9 +233,21 @@ function StateMachineRuntime.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function StateMachineRuntime._getState<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: StateMachineRuntimeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	state: StateT
-): StateDefinition<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+): StateDefinition<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	local definition = self._states[state]
 	assert(definition ~= nil, "unknown state")
 
@@ -167,13 +255,26 @@ function StateMachineRuntime._getState<LayerT, StateT, ParamT, ClipT, LayerBacke
 end
 
 function StateMachineRuntime._findTransition<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT>?
+	self: StateMachineRuntimeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): TransitionRuntimeTypes.TransitionDefinition<
+	StateT,
+	ParamT
+>?
 	for _, transition in self._transitions do
-		if
-			transition.from == nil or transition.from == self._activeState
-		then
+		if transition.from == nil or transition.from == self._activeState then
 			if transition.to == self._activeState then
 				transitionConditionsPass(transition, context)
 			elseif transitionConditionsPass(transition, context) then
@@ -186,9 +287,24 @@ function StateMachineRuntime._findTransition<LayerT, StateT, ParamT, ClipT, Laye
 end
 
 function StateMachineRuntime._startTransition<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	transition: TransitionRuntimeTypes.TransitionDefinition<StateT, ParamT>
+	self: StateMachineRuntimeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	transition: TransitionRuntimeTypes.TransitionDefinition<
+		StateT,
+		ParamT
+	>
 ): ()
 	local fromState = self._activeState
 	local toState = transition.to
@@ -225,9 +341,28 @@ function StateMachineRuntime._startTransition<LayerT, StateT, ParamT, ClipT, Lay
 end
 
 function StateMachineRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
+	self: StateMachineRuntimeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): {
+	MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		LayerBackendT
+	>
+}
 	local transition = self._transition
 	if transition == nil then
 		local nextTransition = self:_findTransition(context)
@@ -270,7 +405,13 @@ function StateMachineRuntime.evaluate<LayerT, StateT, ParamT, ClipT, LayerBacken
 end
 
 function StateMachineRuntime.getDebugSnapshot<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: StateMachineRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	self: StateMachineRuntimeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
 ): MotionNodeTypes.MotionDebugSnapshot
 	local children: { MotionNodeTypes.MotionDebugSnapshot } = {}
 	local previousState = self._previousState

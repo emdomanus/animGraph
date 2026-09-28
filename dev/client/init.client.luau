@@ -231,9 +231,7 @@ local function formatSpeed(value: number): string
 end
 
 local function updateSummary(): ()
-	local priorityText = if actionRobloxPriority ~= nil
-		then tostring(actionRobloxPriority)
-		else "auto"
+	local priorityText = if actionRobloxPriority ~= nil then tostring(actionRobloxPriority) else "auto"
 
 	setSummary(
 		string.format(
@@ -306,7 +304,11 @@ local function makeLocomotionBlend(): AnimGraph.Blend1DNode<Layer, State, Param,
 		samples = samples,
 	}
 
-	return AnimGraph.blend1D("speed" :: Param, config) :: any
+	local newBlend = AnimGraph.blend1D :: (
+		Param,
+		AnimGraph.Blend1DNodeConfig<Layer, State, Param, Clip, LayerBackend>
+	) -> AnimGraph.Blend1DNode<Layer, State, Param, Clip, LayerBackend>
+	return newBlend("speed" :: Param, config)
 end
 
 local function makeActionStateMachine(): AnimGraph.StateMachineRuntime<Layer, State, Param, Clip, LayerBackend>
@@ -399,9 +401,7 @@ local function prepareParts(root: Instance): ()
 end
 
 local function getRootPart(model: Model): BasePart
-	local root = model:FindFirstChild("HumanoidRootPart")
-		or model.PrimaryPart
-		or model:FindFirstChild("Torso")
+	local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart or model:FindFirstChild("Torso")
 
 	assert(root ~= nil and root:IsA("BasePart"), "dev rig is missing a root part")
 	return root
@@ -724,7 +724,12 @@ local function runColdReverseOffsetQueue(): ()
 	dumpNativeTrackStates("cold reverse relative queue before Length resolution")
 end
 
-local function runOffsetTerminal(speed: number, initialPosition: AnimationPosition, deltaSeconds: number, label: string): ()
+local function runOffsetTerminal(
+	speed: number,
+	initialPosition: AnimationPosition,
+	deltaSeconds: number,
+	label: string
+): ()
 	setActionPlaybackRate(speed)
 	playLifecycleClip("wave", false, true, initialPosition)
 	task.delay(0.15, function()
@@ -1341,7 +1346,9 @@ local function makeButton(parent: Instance, text: string, layoutOrder: number, c
 	button.TextScaled = true
 	button.TextWrapped = true
 	button.Parent = parent
-	button.Activated:Connect(callback)
+	button.Activated:Connect(function(_input: InputObject, _clickCount: number)
+		callback()
+	end)
 
 	local textLimit = Instance.new("UITextSizeConstraint")
 	textLimit.MinTextSize = 10
@@ -1351,12 +1358,7 @@ local function makeButton(parent: Instance, text: string, layoutOrder: number, c
 	return button
 end
 
-local function makeSection(
-	parent: Instance,
-	titleText: string,
-	layoutOrder: number,
-	buttons: { TestButton }
-): Frame
+local function makeSection(parent: Instance, titleText: string, layoutOrder: number, buttons: { TestButton }): Frame
 	local section = Instance.new("Frame")
 	section.Name = titleText:gsub("%W+", "")
 	section.LayoutOrder = layoutOrder
@@ -2014,7 +2016,10 @@ local function setupController(animator: Animator): ()
 		layers = layerDefinitions,
 	}
 
-	controller = AnimGraph.animationController.new(config) :: any
+	local newController = AnimGraph.new :: (
+		AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend>
+	) -> AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
+	controller = newController(config)
 
 	local activeController = getController()
 	activeController:on("transitionStarted", function(event)

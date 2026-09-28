@@ -16,11 +16,7 @@ export type RobloxLayerBackend = Types.RobloxLayerBackend
 export type LogicalPriorityBand = Types.LogicalPriorityBand
 export type RobloxAnimatorBackendConfig<ClipT> = Types.RobloxAnimatorBackendConfig<ClipT>
 export type RobloxAnimatorBackend<LayerT, StateT, ClipT> = Types.RobloxAnimatorBackend<LayerT, StateT, ClipT>
-export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> = Types.RobloxAnimatorBackendImpl<
-	LayerT,
-	StateT,
-	ClipT
->
+export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> = Types.RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
 
 type AnimationPosition = DefTypes.AnimationPosition
 type TrackCompletedEvent<LayerT, StateT> = DefTypes.TrackCompletedEvent<LayerT, StateT>
@@ -72,7 +68,7 @@ end
 
 local function copyPriorityBands(priorityBands: { LogicalPriorityBand }?): { LogicalPriorityBand }
 	local source = priorityBands or DEFAULT_PRIORITY_BANDS
-	local bands = table.create(#source)
+	local bands = table.create(#source) :: { LogicalPriorityBand }
 
 	for index, band in source do
 		bands[index] = {
@@ -81,7 +77,7 @@ local function copyPriorityBands(priorityBands: { LogicalPriorityBand }?): { Log
 		}
 	end
 
-	table.sort(bands, function(left, right)
+	table.sort(bands, function(left: LogicalPriorityBand, right: LogicalPriorityBand)
 		return left.min > right.min
 	end)
 
@@ -94,10 +90,7 @@ RobloxAnimatorBackend.__index = RobloxAnimatorBackend
 function RobloxAnimatorBackend.new<LayerT, StateT, ClipT>(
 	config: RobloxAnimatorBackendConfig<ClipT>
 ): RobloxAnimatorBackend<LayerT, StateT, ClipT>
-	local self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> = setmetatable(
-		{},
-		RobloxAnimatorBackend
-	) :: any
+	local self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> = setmetatable({}, RobloxAnimatorBackend) :: any
 
 	self._animator = config.animator
 	self._resolveAssetId = config.resolveAssetId
@@ -127,7 +120,12 @@ end
 
 function RobloxAnimatorBackend._mapPriority<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
-	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
+	request: MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		RobloxLayerBackend
+	>
 ): Enum.AnimationPriority
 	local layerBackend = request.layerBackend
 	if layerBackend ~= nil and layerBackend.robloxPriority ~= nil then
@@ -146,7 +144,12 @@ end
 function RobloxAnimatorBackend._materialize<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
 	sampleTime: number,
-	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
+	request: MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		RobloxLayerBackend
+	>,
 	robloxPriority: Enum.AnimationPriority
 ): Playback<LayerT, StateT, ClipT>?
 	local lifecycleEpoch = self._lifecycleEpoch
@@ -187,7 +190,11 @@ function RobloxAnimatorBackend._materialize<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend._cleanupPhysical<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>,
 	generation: number
 ): ()
 	local playback = self._physical[generation] :: Playback<LayerT, StateT, ClipT>?
@@ -253,7 +260,11 @@ function RobloxAnimatorBackend._complete<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend._handleStopped<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>,
 	generation: number
 ): ()
 	local playback = self._physical[generation] :: Playback<LayerT, StateT, ClipT>?
@@ -301,9 +312,11 @@ function RobloxAnimatorBackend._handleEnded<LayerT, StateT, ClipT>(
 	self:_cleanupPhysical(generation)
 end
 
-function RobloxAnimatorBackend._flushCompletions<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
-): ()
+function RobloxAnimatorBackend._flushCompletions<LayerT, StateT, ClipT>(self: RobloxAnimatorBackendImpl<
+	LayerT,
+	StateT,
+	ClipT
+>): ()
 	if self._applyDepth > 0 or self._dispatchingCompletions then
 		return
 	end
@@ -329,7 +342,14 @@ end
 function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
 	sampleTime: number,
-	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend> }
+	requests: {
+		MotionNodeTypes.ClipRequest<
+			LayerT,
+			StateT,
+			ClipT,
+			RobloxLayerBackend
+		>
+	}
 ): ()
 	assertFiniteSampleTime(sampleTime)
 	local lastSampleTime = self._lastSampleTime
@@ -420,7 +440,11 @@ function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend.setTrackPosition<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>,
 	trackKey: string,
 	position: AnimationPosition
 ): boolean
@@ -442,7 +466,11 @@ function RobloxAnimatorBackend.setTrackPosition<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend.offsetTrackPosition<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>,
 	trackKey: string,
 	deltaSeconds: number
 ): boolean
@@ -464,8 +492,14 @@ function RobloxAnimatorBackend.offsetTrackPosition<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend.bindToTrackCompleted<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
-	callback: (event: TrackCompletedEvent<LayerT, StateT>) -> ()
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>,
+	callback: (
+		event: TrackCompletedEvent<LayerT, StateT>
+	) -> ()
 ): DefTypes.Release
 	assert(typeof(callback) == "function", "track completion callback must be a function")
 	if self._destroyed then
@@ -510,9 +544,7 @@ function RobloxAnimatorBackend.stopLayer<LayerT, StateT, ClipT>(
 	end
 end
 
-function RobloxAnimatorBackend._clearPhysical<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
-): ()
+function RobloxAnimatorBackend._clearPhysical<LayerT, StateT, ClipT>(self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>): ()
 	local physical: { Playback<LayerT, StateT, ClipT> } = {}
 	for _, playback in self._physical do
 		physical[#physical + 1] = playback
@@ -528,16 +560,12 @@ function RobloxAnimatorBackend._clearPhysical<LayerT, StateT, ClipT>(
 	self._warnings = {}
 end
 
-function RobloxAnimatorBackend.clear<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
-): ()
+function RobloxAnimatorBackend.clear<LayerT, StateT, ClipT>(self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>): ()
 	self._lifecycleEpoch += 1
 	self:_clearPhysical()
 end
 
-function RobloxAnimatorBackend.destroy<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
-): ()
+function RobloxAnimatorBackend.destroy<LayerT, StateT, ClipT>(self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>): ()
 	if self._destroyed then
 		return
 	end
@@ -549,7 +577,11 @@ function RobloxAnimatorBackend.destroy<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend.getCapabilities<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>
 ): BackendTypes.BackendCapabilities
 	return self._capabilities
 end
@@ -579,7 +611,11 @@ local function appendPlaybackDebug<LayerT, StateT, ClipT>(
 end
 
 function RobloxAnimatorBackend.getDebugSnapshot<LayerT, StateT, ClipT>(
-	self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>
+	self: RobloxAnimatorBackendImpl<
+		LayerT,
+		StateT,
+		ClipT
+	>
 ): BackendTypes.BackendDebugSnapshot
 	local tracks: { BackendTypes.BackendDebugTrack } = {}
 	for _, playback in self._active do

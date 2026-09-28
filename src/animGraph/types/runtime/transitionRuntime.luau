@@ -4,16 +4,7 @@
 
 local ParameterStoreTypes = require(script.Parent.Parent.controller.parameterStore)
 
-export type TransitionConditionOp =
-	"=="
-	| "~="
-	| ">"
-	| ">="
-	| "<"
-	| "<="
-	| "truthy"
-	| "falsy"
-	| "trigger"
+export type TransitionConditionOp = "==" | "~=" | ">" | ">=" | "<" | "<=" | "truthy" | "falsy" | "trigger"
 
 export type TransitionCondition<ParamT> = {
 	parameter: ParamT,
@@ -40,10 +31,10 @@ export type TransitionDebugSnapshot<StateT> = {
 }
 
 export type TransitionRuntime<StateT, ParamT> = {
-	update: (self: TransitionRuntime<StateT, ParamT>, timePosition: number) -> (),
-	getAlpha: (self: TransitionRuntime<StateT, ParamT>) -> number,
-	isComplete: (self: TransitionRuntime<StateT, ParamT>) -> boolean,
-	getDebugSnapshot: (self: TransitionRuntime<StateT, ParamT>) -> TransitionDebugSnapshot<StateT>,
+	read update: (self: TransitionRuntime<StateT, ParamT>, timePosition: number) -> (),
+	read getAlpha: (self: TransitionRuntime<StateT, ParamT>) -> number,
+	read isComplete: (self: TransitionRuntime<StateT, ParamT>) -> boolean,
+	read getDebugSnapshot: (self: TransitionRuntime<StateT, ParamT>) -> TransitionDebugSnapshot<StateT>,
 }
 
 export type TransitionRuntimeImpl<StateT, ParamT> = TransitionRuntime<StateT, ParamT> & {

@@ -35,34 +35,34 @@ export type BackendDebugSnapshot = {
 }
 
 export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
-	apply: (
+	read apply: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		sampleTime: number,
 		requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
 	) -> (),
-	setTrackPosition: (
+	read setTrackPosition: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		trackKey: string,
 		position: DefTypes.AnimationPosition
 	) -> boolean,
-	offsetTrackPosition: (
+	read offsetTrackPosition: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		trackKey: string,
 		deltaSeconds: number
 	) -> boolean,
-	bindToTrackCompleted: (
+	read bindToTrackCompleted: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		callback: (event: DefTypes.TrackCompletedEvent<LayerT, StateT>) -> ()
 	) -> DefTypes.Release,
-	stopLayer: (
+	read stopLayer: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		layer: LayerT,
 		fadeTime: number?
 	) -> (),
-	clear: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> (),
-	destroy: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> (),
-	getCapabilities: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> BackendCapabilities,
-	getDebugSnapshot: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> BackendDebugSnapshot,
+	read clear: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> (),
+	read destroy: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> (),
+	read getCapabilities: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> BackendCapabilities,
+	read getDebugSnapshot: (self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>) -> BackendDebugSnapshot,
 }
 
 return {}

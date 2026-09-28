@@ -1,0 +1,6 @@
+{
+  "luau-lsp.sourcemap.enabled": true,
+  "luau-lsp.sourcemap.rojoProjectFile": "dev.project.json",
+  "luau-lsp.sourcemap.sourcemapFile": "dev-sourcemap.json",
+  "luau-lsp.fflags.override": { "LuauSolverV2": "true" }
+}

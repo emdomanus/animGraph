@@ -14,17 +14,37 @@ local LayerRuntimeTypes = require(script.Parent.Parent.types.runtime.layerRuntim
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 local ParameterStoreTypes = require(script.Parent.Parent.types.controller.parameterStore)
 
-export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> =
 	Types.AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>
-export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerImpl<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 
-type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.GraphIntentCommand<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 
 type PendingBackendStop<LayerT> = {
 	layer: LayerT,
@@ -92,9 +112,7 @@ local function copyPlayOptions<StateT, LayerBackendT>(
 	}
 end
 
-local function assertPlayOptions<StateT, LayerBackendT>(
-	options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?
-): ()
+local function assertPlayOptions<StateT, LayerBackendT>(options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?): ()
 	if options == nil then
 		return
 	end
@@ -120,7 +138,13 @@ local function assertPlayOptions<StateT, LayerBackendT>(
 end
 
 local function updateWasInvalidated<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	lifecycleEpoch: number
 ): boolean
 	return self._destroyed or self._lifecycleEpoch ~= lifecycleEpoch
@@ -143,14 +167,24 @@ local function readTimeSample(
 end
 
 function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	config: AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	config: AnimationControllerConfig<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	assertRequiredReader(config.timeReader, "timeReader")
 
-	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = setmetatable(
-		{},
-		AnimationController
-	) :: any
+	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
+		setmetatable({}, AnimationController) :: any
 
 	self._backend = config.backend
 	self._timeReader = config.timeReader
@@ -178,8 +212,17 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function AnimationController.addLayer<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	definition: LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT>
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	definition: LayerRuntimeTypes.LayerDefinition<
+		LayerT,
+		LayerBackendT
+	>
 ): ()
 	assert(not self._destroyed, "AnimationController is destroyed")
 	assert(self._layers[definition.id] == nil, "layer already exists")
@@ -189,26 +232,59 @@ function AnimationController.addLayer<LayerT, StateT, ParamT, ClipT, LayerBacken
 end
 
 function AnimationController.hasLayer<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT
 ): boolean
 	return self._layers[layer] ~= nil
 end
 
 local function requireLayer<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT
-): LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+): LayerRuntimeTypes.LayerRuntimeImpl<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	local layerRuntime = self._layers[layer]
 	assert(layerRuntime ~= nil, "unknown layer")
 	return layerRuntime
 end
 
 function AnimationController.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
-	motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?
+	motion: MotionNodeTypes.MotionNode<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	options: LayerRuntimeTypes.LayerPlayOptions<
+		StateT,
+		LayerBackendT
+	>?
 ): ()
 	if self._destroyed then
 		return
@@ -225,7 +301,13 @@ function AnimationController.play<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function AnimationController.setTrackPosition<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	trackKey: string,
 	position: DefTypes.AnimationPosition
 ): boolean
@@ -238,7 +320,13 @@ function AnimationController.setTrackPosition<LayerT, StateT, ParamT, ClipT, Lay
 end
 
 function AnimationController.offsetTrackPosition<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	trackKey: string,
 	deltaSeconds: number
 ): boolean
@@ -251,7 +339,13 @@ function AnimationController.offsetTrackPosition<LayerT, StateT, ParamT, ClipT, 
 end
 
 function AnimationController.stopLayer<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	fadeTime: number?
 ): ()
@@ -272,7 +366,13 @@ function AnimationController.stopLayer<LayerT, StateT, ParamT, ClipT, LayerBacke
 end
 
 function AnimationController.setLayerWeight<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	weight: number
 ): ()
@@ -288,7 +388,13 @@ function AnimationController.setLayerWeight<LayerT, StateT, ParamT, ClipT, Layer
 end
 
 function AnimationController.getLayerWeight<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT
 ): number?
 	local layerRuntime = self._layers[layer]
@@ -296,7 +402,13 @@ function AnimationController.getLayerWeight<LayerT, StateT, ParamT, ClipT, Layer
 end
 
 function AnimationController.setLayerSpeed<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	speed: number
 ): ()
@@ -312,7 +424,13 @@ function AnimationController.setLayerSpeed<LayerT, StateT, ParamT, ClipT, LayerB
 end
 
 function AnimationController.getLayerSpeed<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT
 ): number?
 	local layerRuntime = self._layers[layer]
@@ -320,7 +438,13 @@ function AnimationController.getLayerSpeed<LayerT, StateT, ParamT, ClipT, LayerB
 end
 
 function AnimationController.setLayerLogicalPriority<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	logicalPriority: number
 ): ()
@@ -336,7 +460,13 @@ function AnimationController.setLayerLogicalPriority<LayerT, StateT, ParamT, Cli
 end
 
 function AnimationController.getLayerLogicalPriority<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT
 ): number?
 	local layerRuntime = self._layers[layer]
@@ -344,7 +474,13 @@ function AnimationController.getLayerLogicalPriority<LayerT, StateT, ParamT, Cli
 end
 
 function AnimationController.setLayerBackend<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	layerBackend: LayerBackendT?
 ): ()
@@ -353,14 +489,20 @@ function AnimationController.setLayerBackend<LayerT, StateT, ParamT, ClipT, Laye
 	end
 	requireLayer(self, layer)
 	self._pendingCommands[#self._pendingCommands + 1] = {
-		kind = "setLayerBackend",
+		kind = "setLayerBackend" :: "setLayerBackend",
 		layer = layer,
 		layerBackend = layerBackend,
 	}
 end
 
 function AnimationController.getLayerBackend<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT
 ): LayerBackendT?
 	local layerRuntime = self._layers[layer]
@@ -368,7 +510,13 @@ function AnimationController.getLayerBackend<LayerT, StateT, ParamT, ClipT, Laye
 end
 
 function AnimationController.setDefaultTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	reader: DefTypes.TimeReader
 ): ()
 	if self._destroyed then
@@ -382,7 +530,13 @@ function AnimationController.setDefaultTimeReader<LayerT, StateT, ParamT, ClipT,
 end
 
 function AnimationController.setLayerTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	reader: DefTypes.TimeReader?
 ): ()
@@ -392,14 +546,20 @@ function AnimationController.setLayerTimeReader<LayerT, StateT, ParamT, ClipT, L
 	requireLayer(self, layer)
 	assertReader(reader, "timeReader")
 	self._pendingCommands[#self._pendingCommands + 1] = {
-		kind = "setLayerTimeReader",
+		kind = "setLayerTimeReader" :: "setLayerTimeReader",
 		layer = layer,
 		reader = reader,
 	}
 end
 
 function AnimationController.setActivePlayTimeReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	layer: LayerT,
 	reader: DefTypes.TimeReader?
 ): ()
@@ -409,14 +569,20 @@ function AnimationController.setActivePlayTimeReader<LayerT, StateT, ParamT, Cli
 	requireLayer(self, layer)
 	assertReader(reader, "timeReader")
 	self._pendingCommands[#self._pendingCommands + 1] = {
-		kind = "setActivePlayTimeReader",
+		kind = "setActivePlayTimeReader" :: "setActivePlayTimeReader",
 		layer = layer,
 		reader = reader,
 	}
 end
 
 function AnimationController.setParameter<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT,
 	value: ParameterStoreTypes.ParameterValue
 ): ()
@@ -431,14 +597,26 @@ function AnimationController.setParameter<LayerT, StateT, ParamT, ClipT, LayerBa
 end
 
 function AnimationController.getParameter<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT
 ): ParameterStoreTypes.ParameterValue?
 	return self._parameters:get(parameter)
 end
 
 function AnimationController.setFloat<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT,
 	value: number
 ): ()
@@ -446,7 +624,13 @@ function AnimationController.setFloat<LayerT, StateT, ParamT, ClipT, LayerBacken
 end
 
 function AnimationController.getFloat<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT,
 	fallback: number?
 ): number
@@ -454,7 +638,13 @@ function AnimationController.getFloat<LayerT, StateT, ParamT, ClipT, LayerBacken
 end
 
 function AnimationController.setBool<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT,
 	value: boolean
 ): ()
@@ -462,7 +652,13 @@ function AnimationController.setBool<LayerT, StateT, ParamT, ClipT, LayerBackend
 end
 
 function AnimationController.getBool<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT,
 	fallback: boolean?
 ): boolean
@@ -470,7 +666,13 @@ function AnimationController.getBool<LayerT, StateT, ParamT, ClipT, LayerBackend
 end
 
 function AnimationController.setTrigger<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT
 ): ()
 	if self._destroyed then
@@ -483,23 +685,52 @@ function AnimationController.setTrigger<LayerT, StateT, ParamT, ClipT, LayerBack
 end
 
 function AnimationController.consumeTrigger<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	parameter: ParamT
 ): boolean
 	return self._parameters:consumeTrigger(parameter)
 end
 
 function AnimationController.on<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	name: EventBusTypes.AnimationEventName,
-	callback: EventBusTypes.AnimationEventCallback<LayerT, StateT>
+	callback: EventBusTypes.AnimationEventCallback<
+		LayerT,
+		StateT
+	>
 ): EventBusTypes.Release
 	return self._eventBus:on(name, callback)
 end
 
 local function finalDefaultReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	commands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> }
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	commands: {
+		GraphIntentCommand<
+			LayerT,
+			StateT,
+			ParamT,
+			ClipT,
+			LayerBackendT
+		>
+	}
 ): DefTypes.TimeReader
 	local reader = self._timeReader
 	for _, command in commands do
@@ -512,11 +743,27 @@ end
 
 local function readLayerTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	layer: LayerT,
-	layerRuntime: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	layerRuntime: LayerRuntimeTypes.LayerRuntimeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	defaultReader: DefTypes.TimeReader,
-	commands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	commands: {
+		GraphIntentCommand<
+			LayerT,
+			StateT,
+			ParamT,
+			ClipT,
+			LayerBackendT
+		>
+	},
 	sampleTime: number,
-	samplesByReader: { [DefTypes.TimeReader]: DefTypes.TimeSample },
+	samplesByReader: {
+		[DefTypes.TimeReader]: DefTypes.TimeSample,
+	},
 	updateInvalidated: () -> boolean
 ): DefTypes.TimeSample?
 	local playing = layerRuntime._playing
@@ -559,8 +806,22 @@ local function readLayerTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 end
 
 local function commitCommands<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	commands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> }
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	commands: {
+		GraphIntentCommand<
+			LayerT,
+			StateT,
+			ParamT,
+			ClipT,
+			LayerBackendT
+		>
+	}
 ): { PendingBackendStop<LayerT> }
 	local backendStops: { PendingBackendStop<LayerT> } = {}
 	for _, command in commands do
@@ -596,7 +857,13 @@ local function commitCommands<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
 	sampleTime: number
 ): ()
 	if self._destroyed then
@@ -610,7 +877,7 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 
 	local pendingCommands = self._pendingCommands
 	local commandCount = #pendingCommands
-	local commands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> } = table.create(commandCount)
+	local commands = table.create(commandCount) :: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> }
 	for index = 1, commandCount do
 		commands[index] = pendingCommands[index]
 	end
@@ -689,9 +956,13 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	self._backend:apply(sampleTime, requests)
 end
 
-function AnimationController.clear<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): ()
+function AnimationController.clear<LayerT, StateT, ParamT, ClipT, LayerBackendT>(self: AnimationControllerImpl<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>): ()
 	self._lifecycleEpoch += 1
 	self._pendingCommands = {}
 	for _, layerRuntime in self._layers do
@@ -702,9 +973,13 @@ function AnimationController.clear<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 	self._backend:clear()
 end
 
-function AnimationController.destroy<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): ()
+function AnimationController.destroy<LayerT, StateT, ParamT, ClipT, LayerBackendT>(self: AnimationControllerImpl<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>): ()
 	if self._destroyed then
 		return
 	end
@@ -721,8 +996,19 @@ function AnimationController.destroy<LayerT, StateT, ParamT, ClipT, LayerBackend
 end
 
 function AnimationController.getDebugSnapshot<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): AnimationControllerDebugSnapshot<
+	LayerT,
+	StateT,
+	ParamT,
+	LayerBackendT
+>
 	local layers: { LayerRuntimeTypes.LayerDebugSnapshot<LayerT, StateT, LayerBackendT> } = {}
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]

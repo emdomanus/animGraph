@@ -56,11 +56,11 @@ export type MotionDebugSnapshot = {
 }
 
 export type MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
-	evaluate: (
+	read evaluate: (
 		self: MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		context: MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 	) -> { ClipRequest<LayerT, StateT, ClipT, LayerBackendT> },
-	getDebugSnapshot: (self: MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> MotionDebugSnapshot,
+	read getDebugSnapshot: (self: MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> MotionDebugSnapshot,
 }
 
 return {}

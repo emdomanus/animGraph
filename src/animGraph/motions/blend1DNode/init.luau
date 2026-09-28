@@ -5,14 +5,34 @@
 local Types = require(script.Parent.Parent.types.motions.blend1DNode)
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 
-export type Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type Blend1DNodeConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.Blend1DNodeConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type Blend1DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.Blend1DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-export type Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Types.Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+export type Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.Blend1DSample<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type Blend1DNodeConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.Blend1DNodeConfig<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type Blend1DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.Blend1DNode<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
+export type Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.Blend1DNodeImpl<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 
 local EPSILON = 1e-5
 
@@ -21,7 +41,15 @@ local function readNumber(value: any, fallback: number): number
 end
 
 local function computeWeights<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	samples: { Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	samples: {
+		Blend1DSample<
+			LayerT,
+			StateT,
+			ParamT,
+			ClipT,
+			LayerBackendT
+		>
+	},
 	value: number
 ): { number }
 	local count = #samples
@@ -64,17 +92,34 @@ Blend1DNode.__index = Blend1DNode
 
 function Blend1DNode.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	parameter: ParamT,
-	config: Blend1DNodeConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): Blend1DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	config: Blend1DNodeConfig<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): Blend1DNode<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	assert(#config.samples > 0, "Blend1DNode requires at least one sample")
 
 	local samples = table.clone(config.samples)
-	table.sort(samples, function(left, right)
-		return left.threshold < right.threshold
-	end)
+	table.sort(
+		samples,
+		function(
+			left: Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+			right: Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+		)
+			return left.threshold < right.threshold
+		end
+	)
 
-	local self: Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-		setmetatable({}, Blend1DNode) :: any
+	local self: Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = setmetatable({}, Blend1DNode) :: any
 	self._parameter = parameter
 	self._name = config.name or "Blend1D"
 	self._defaultValue = config.defaultValue or 0
@@ -86,9 +131,28 @@ function Blend1DNode.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function Blend1DNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
-	context: MotionNodeTypes.MotionEvaluateContext<LayerT, StateT, ParamT, ClipT, LayerBackendT>
-): { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
+	self: Blend1DNodeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	context: MotionNodeTypes.MotionEvaluateContext<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
+): {
+	MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		LayerBackendT
+	>
+}
 	local value = readNumber(context.getParameter(self._parameter), self._defaultValue)
 	local weights = computeWeights(self._samples, value)
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
@@ -111,9 +175,15 @@ function Blend1DNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 end
 
 function Blend1DNode.getDebugSnapshot<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
-	self: Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	self: Blend1DNodeImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>
 ): MotionNodeTypes.MotionDebugSnapshot
-	local children: { MotionNodeTypes.MotionDebugSnapshot } = table.create(#self._samples)
+	local children = table.create(#self._samples) :: { MotionNodeTypes.MotionDebugSnapshot }
 	for index, sample in self._samples do
 		local child = sample.motion:getDebugSnapshot()
 		local details: { [string]: any } = child.details or {}

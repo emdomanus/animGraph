@@ -27,11 +27,11 @@ export type StackModifierEntry = {
 }
 
 export type StackModifier = {
-	push: (self: StackModifier, value: number, options: SpeedModifierOptions?) -> Release,
-	evaluate: (self: StackModifier, baseValue: number, nextStack: StackModifier?) -> number,
-	clear: (self: StackModifier) -> (),
-	destroy: (self: StackModifier) -> (),
-	isEmpty: (self: StackModifier) -> boolean,
+	read push: (self: StackModifier, value: number, options: SpeedModifierOptions?) -> Release,
+	read evaluate: (self: StackModifier, baseValue: number, nextStack: StackModifier?) -> number,
+	read clear: (self: StackModifier) -> (),
+	read destroy: (self: StackModifier) -> (),
+	read isEmpty: (self: StackModifier) -> boolean,
 }
 
 export type StackModifierImpl = StackModifier & {
@@ -41,8 +41,8 @@ export type StackModifierImpl = StackModifier & {
 	_onChanged: (() -> ())?,
 	_destroyed: boolean,
 
-	_applyEntries: (self: StackModifierImpl, baseValue: number) -> number,
-	_emitChanged: (self: StackModifierImpl) -> (),
+	read _applyEntries: (self: StackModifierImpl, baseValue: number) -> number,
+	read _emitChanged: (self: StackModifierImpl) -> (),
 }
 
 return {}
