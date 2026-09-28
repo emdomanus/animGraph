@@ -13,6 +13,56 @@ local controller = AnimGraph.new({
 `backend` and `timeReader` are required. `layers` is optional because
 layers may be added later.
 
+## Controller types
+
+Name the graph's type vocabulary once, then share it between the controller and
+its debug snapshot:
+
+```luau
+type CharacterGraphTypes = {
+	Layer: "base" | "action",
+	State: "idle" | "run",
+	Param: "speed" | "grounded",
+	Clip: string,
+	LayerBackend: AnimGraph.RobloxLayerBackend,
+}
+
+type Controller = AnimGraph.AnimationController<CharacterGraphTypes>
+type DebugSnapshot = AnimGraph.AnimationControllerDebugSnapshot<CharacterGraphTypes>
+```
+
+The bundle is a type declaration; it creates no runtime table. The named fields
+preserve the graph's layer, state, parameter, clip, and backend-data restrictions.
+The snapshot uses `Layer`, `State`, `Param`, and `LayerBackend`; it has no clip
+generic of its own. A local assigned from `controller:getDebugSnapshot()` already
+infers the snapshot type, so an explicit annotation is optional.
+
+`AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT>` takes four
+arguments. Its former `ParamT` argument was unused and has been removed. Parameter
+names belong to the resulting controller's type, not the construction config.
+The constructor cannot infer those names from its inputs. Specialize its function
+type once when constructing a graph with a specific parameter vocabulary:
+
+```luau
+type Config = AnimGraph.AnimationControllerConfig<
+	index<CharacterGraphTypes, "Layer">,
+	index<CharacterGraphTypes, "State">,
+	index<CharacterGraphTypes, "Clip">,
+	index<CharacterGraphTypes, "LayerBackend">
+>
+local newController = AnimGraph.new :: (Config) -> Controller
+local controller = newController({
+	backend = backend,
+	timeReader = defaultReader,
+	layers = layerDefinitions,
+})
+```
+
+When upgrading annotations, replace the controller's five arguments and the
+snapshot's four arguments with the named bundle, and remove the third argument
+from `AnimationControllerConfig`. Motion and backend types retain their existing
+individual generic arguments.
+
 ## Timing contract
 
 ```luau

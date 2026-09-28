@@ -14,22 +14,14 @@ local LayerRuntimeTypes = require(script.Parent.Parent.types.runtime.layerRuntim
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 local ParameterStoreTypes = require(script.Parent.Parent.types.controller.parameterStore)
 
-export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
+export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
 	LayerT,
 	StateT,
-	ParamT,
 	ClipT,
 	LayerBackendT
 >
-export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> =
-	Types.AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>
-export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationController<
-	LayerT,
-	StateT,
-	ParamT,
-	ClipT,
-	LayerBackendT
->
+export type AnimationControllerDebugSnapshot<GraphTypes> = Types.AnimationControllerDebugSnapshot<GraphTypes>
+export type AnimationController<GraphTypes> = Types.AnimationController<GraphTypes>
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerImpl<
 	LayerT,
 	StateT,
@@ -170,17 +162,10 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	config: AnimationControllerConfig<
 		LayerT,
 		StateT,
-		ParamT,
 		ClipT,
 		LayerBackendT
 	>
-): AnimationController<
-	LayerT,
-	StateT,
-	ParamT,
-	ClipT,
-	LayerBackendT
->
+): AnimationController<{ Layer: LayerT, State: StateT, Param: ParamT, Clip: ClipT, LayerBackend: LayerBackendT }>
 	assertRequiredReader(config.timeReader, "timeReader")
 
 	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
@@ -1003,12 +988,7 @@ function AnimationController.getDebugSnapshot<LayerT, StateT, ParamT, ClipT, Lay
 		ClipT,
 		LayerBackendT
 	>
-): AnimationControllerDebugSnapshot<
-	LayerT,
-	StateT,
-	ParamT,
-	LayerBackendT
->
+): AnimationControllerDebugSnapshot<{ Layer: LayerT, State: StateT, Param: ParamT, LayerBackend: LayerBackendT }>
 	local layers: { LayerRuntimeTypes.LayerDebugSnapshot<LayerT, StateT, LayerBackendT> } = {}
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]
