@@ -21,13 +21,6 @@ type Param = "speed" | "waveTrigger" | "cheerTrigger" | "danceTrigger" | "clearA
 type Clip = "idle" | "walk" | "jump" | "wave" | "cheer" | "dance"
 type LayerBackend = AnimGraph.RobloxLayerBackend
 
-type GraphTypes = {
-	Layer: Layer,
-	State: State,
-	Param: Param,
-	Clip: Clip,
-	LayerBackend: LayerBackend,
-}
 type AnimationPosition = AnimGraph.AnimationPosition
 
 type TestButton = {
@@ -87,7 +80,7 @@ local consoleScroller: ScrollingFrame? = nil
 local consoleContentLayout: UIListLayout? = nil
 local controlGridLayouts: { ControlGrid } = {}
 
-local controller: AnimGraph.AnimationController<GraphTypes>? = nil
+local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>? = nil
 local releaseUpdate: (() -> ())? = nil
 local debugConnection: RBXScriptConnection? = nil
 local cameraConnection: RBXScriptConnection? = nil
@@ -277,7 +270,7 @@ local function actionTimeReader(time: number): AnimGraph.TimeSample
 	return sampleTime(time, "action")
 end
 
-local function getController(): AnimGraph.AnimationController<GraphTypes>
+local function getController(): AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
 	local activeController = controller
 	assert(activeController ~= nil, "AnimGraph dev controller is not ready")
 
@@ -2026,7 +2019,7 @@ local function setupController(animator: Animator): ()
 
 	local newController = AnimGraph.new :: (
 		AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend>
-	) -> AnimGraph.AnimationController<GraphTypes>
+	) -> AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
 	controller = newController(config)
 
 	local activeController = getController()

@@ -6,14 +6,7 @@ type State = "idle"
 type Param = "speed"
 type Clip = "idleClip"
 
-type GraphTypes = {
-	Layer: Layer,
-	State: State,
-	Param: Param,
-	Clip: Clip,
-	LayerBackend: AnimGraph.RobloxLayerBackend,
-}
-type Controller = AnimGraph.AnimationController<GraphTypes>
+type Controller = AnimGraph.AnimationController<Layer, State, Param, Clip, AnimGraph.RobloxLayerBackend>
 local function reject(
 	controller: Controller,
 	wrongMotion: AnimGraph.MotionNode<Layer, State, Param, "otherClip", AnimGraph.RobloxLayerBackend>
@@ -22,7 +15,8 @@ local function reject(
 	controller:setFloat("unknownParameter", 1) -- EXPECT_ERROR
 	controller:play("body" :: Layer, wrongMotion) -- EXPECT_ERROR
 	controller:setLayerBackend("body" :: Layer, "notBackendData") -- EXPECT_ERROR
-	local snapshot: AnimGraph.AnimationControllerDebugSnapshot<GraphTypes> = controller:getDebugSnapshot()
+	local snapshot: AnimGraph.AnimationControllerDebugSnapshot<Layer, State, Param, AnimGraph.RobloxLayerBackend> =
+		controller:getDebugSnapshot()
 	local wrongLayer: "unknownLayer" = snapshot.layers[1].id -- EXPECT_ERROR
 	local wrongState: "unknownState" = snapshot.layers[1].state -- EXPECT_ERROR
 	local wrongValue: Vector3 = snapshot.parameters["speed" :: Param] -- EXPECT_ERROR

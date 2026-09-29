@@ -15,15 +15,9 @@ export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = {
 	layers: { LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT> }?,
 }
 
-export type AnimationControllerDebugSnapshot<GraphTypes> = {
-	parameters: { [index<GraphTypes, "Param">]: ParameterStoreTypes.ParameterValue },
-	layers: {
-		LayerRuntimeTypes.LayerDebugSnapshot<
-			index<GraphTypes, "Layer">,
-			index<GraphTypes, "State">,
-			index<GraphTypes, "LayerBackend">
-		>
-	},
+export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> = {
+	parameters: { [ParamT]: ParameterStoreTypes.ParameterValue },
+	layers: { LayerRuntimeTypes.LayerDebugSnapshot<LayerT, StateT, LayerBackendT> },
 	backend: BackendTypes.BackendDebugSnapshot,
 }
 
@@ -72,141 +66,153 @@ export type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	parameter: ParamT,
 }
 
-export type AnimationController<GraphTypes> = {
+export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	read addLayer: (
-		self: AnimationController<GraphTypes>,
-		definition: LayerRuntimeTypes.LayerDefinition<index<GraphTypes, "Layer">, index<GraphTypes, "LayerBackend">>
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		definition: LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT>
 	) -> (),
-	read hasLayer: (self: AnimationController<GraphTypes>, layer: index<GraphTypes, "Layer">) -> boolean,
+	read hasLayer: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, layer: LayerT) -> boolean,
 	read play: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
-		motion: MotionNodeTypes.MotionNode<
-			index<GraphTypes, "Layer">,
-			index<GraphTypes, "State">,
-			index<GraphTypes, "Param">,
-			index<GraphTypes, "Clip">,
-			index<GraphTypes, "LayerBackend">
-		>,
-		options: LayerRuntimeTypes.LayerPlayOptions<index<GraphTypes, "State">, index<GraphTypes, "LayerBackend">>?
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
+		motion: MotionNodeTypes.MotionNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		options: LayerRuntimeTypes.LayerPlayOptions<StateT, LayerBackendT>?
 	) -> (),
 	read setTrackPosition: (
-		self: AnimationController<GraphTypes>,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		trackKey: string,
 		position: DefTypes.AnimationPosition
 	) -> boolean,
 	read offsetTrackPosition: (
-		self: AnimationController<GraphTypes>,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		trackKey: string,
 		deltaSeconds: number
 	) -> boolean,
 	read stopLayer: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
 		fadeTime: number?
 	) -> (),
 	read setLayerWeight: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
 		weight: number
 	) -> (),
-	read getLayerWeight: (self: AnimationController<GraphTypes>, layer: index<GraphTypes, "Layer">) -> number?,
+	read getLayerWeight: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT
+	) -> number?,
 	read setLayerSpeed: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
 		speed: number
 	) -> (),
-	read getLayerSpeed: (self: AnimationController<GraphTypes>, layer: index<GraphTypes, "Layer">) -> number?,
+	read getLayerSpeed: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT
+	) -> number?,
 	read setLayerLogicalPriority: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
 		logicalPriority: number
 	) -> (),
 	read getLayerLogicalPriority: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT
 	) -> number?,
 	read setLayerBackend: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
-		layerBackend: index<GraphTypes, "LayerBackend">?
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
+		layerBackend: LayerBackendT?
 	) -> (),
 	read getLayerBackend: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">
-	) -> index<GraphTypes, "LayerBackend">?,
-	read setDefaultTimeReader: (self: AnimationController<GraphTypes>, reader: DefTypes.TimeReader) -> (),
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT
+	) -> LayerBackendT?,
+	read setDefaultTimeReader: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		reader: DefTypes.TimeReader
+	) -> (),
 	read setLayerTimeReader: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
 		reader: DefTypes.TimeReader?
 	) -> (),
 	read setActivePlayTimeReader: (
-		self: AnimationController<GraphTypes>,
-		layer: index<GraphTypes, "Layer">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		layer: LayerT,
 		reader: DefTypes.TimeReader?
 	) -> (),
 
 	read setParameter: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT,
 		value: ParameterStoreTypes.ParameterValue
 	) -> (),
 	read getParameter: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT
 	) -> ParameterStoreTypes.ParameterValue?,
 	read setFloat: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT,
 		value: number
 	) -> (),
 	read getFloat: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT,
 		fallback: number?
 	) -> number,
 	read setBool: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT,
 		value: boolean
 	) -> (),
 	read getBool: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT,
 		fallback: boolean?
 	) -> boolean,
-	read setTrigger: (self: AnimationController<GraphTypes>, parameter: index<GraphTypes, "Param">) -> (),
+	read setTrigger: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT
+	) -> (),
 	read consumeTrigger: (
-		self: AnimationController<GraphTypes>,
-		parameter: index<GraphTypes, "Param">
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		parameter: ParamT
 	) -> boolean,
 	read on: (
-		self: AnimationController<GraphTypes>,
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		name: EventBusTypes.AnimationEventName,
-		callback: EventBusTypes.AnimationEventCallback<index<GraphTypes, "Layer">, index<GraphTypes, "State">>
+		callback: EventBusTypes.AnimationEventCallback<LayerT, StateT>
 	) -> EventBusTypes.Release,
 
-	read update: (self: AnimationController<GraphTypes>, sampleTime: number) -> (),
-	read clear: (self: AnimationController<GraphTypes>) -> (),
-	read destroy: (self: AnimationController<GraphTypes>) -> (),
-	read getDebugSnapshot: (self: AnimationController<GraphTypes>) -> AnimationControllerDebugSnapshot<GraphTypes>,
+	read update: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>, sampleTime: number) -> (),
+	read clear: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
+	read destroy: (self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>) -> (),
+	read getDebugSnapshot: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
+	) -> AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>,
 }
 
-export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	AnimationController<{ Layer: LayerT, State: StateT, Param: ParamT, Clip: ClipT, LayerBackend: LayerBackendT }>
-	& {
-		_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
-		_timeReader: DefTypes.TimeReader,
-		_lastSampleTime: number?,
-		_pendingCommands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
-		_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
-		_layerOrder: { LayerT },
-		_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
-		_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
-		_releaseBackendCompletion: DefTypes.Release?,
-		_lifecycleEpoch: number,
-		_destroyed: boolean,
-	}
+export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+> & {
+	_backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+	_timeReader: DefTypes.TimeReader,
+	_lastSampleTime: number?,
+	_pendingCommands: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	_layers: { [LayerT]: LayerRuntimeTypes.LayerRuntimeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	_layerOrder: { LayerT },
+	_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
+	_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
+	_releaseBackendCompletion: DefTypes.Release?,
+	_lifecycleEpoch: number,
+	_destroyed: boolean,
+}
 
 return {}

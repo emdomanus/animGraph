@@ -20,8 +20,15 @@ export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = Ty
 	ClipT,
 	LayerBackendT
 >
-export type AnimationControllerDebugSnapshot<GraphTypes> = Types.AnimationControllerDebugSnapshot<GraphTypes>
-export type AnimationController<GraphTypes> = Types.AnimationController<GraphTypes>
+export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> =
+	Types.AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>
+export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerImpl<
 	LayerT,
 	StateT,
@@ -165,7 +172,13 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		ClipT,
 		LayerBackendT
 	>
-): AnimationController<{ Layer: LayerT, State: StateT, Param: ParamT, Clip: ClipT, LayerBackend: LayerBackendT }>
+): AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 	assertRequiredReader(config.timeReader, "timeReader")
 
 	local self: AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
@@ -988,7 +1001,12 @@ function AnimationController.getDebugSnapshot<LayerT, StateT, ParamT, ClipT, Lay
 		ClipT,
 		LayerBackendT
 	>
-): AnimationControllerDebugSnapshot<{ Layer: LayerT, State: StateT, Param: ParamT, LayerBackend: LayerBackendT }>
+): AnimationControllerDebugSnapshot<
+	LayerT,
+	StateT,
+	ParamT,
+	LayerBackendT
+>
 	local layers: { LayerRuntimeTypes.LayerDebugSnapshot<LayerT, StateT, LayerBackendT> } = {}
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]

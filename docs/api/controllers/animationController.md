@@ -15,27 +15,25 @@ layers may be added later.
 
 ## Controller types
 
-Name the graph's type vocabulary once, then share it between the controller and
-its debug snapshot:
+The controller takes five independent type arguments. Use local aliases to name
+the graph's vocabulary and shorten consumer annotations:
 
 ```luau
-type CharacterGraphTypes = {
-	Layer: "base" | "action",
-	State: "idle" | "run",
-	Param: "speed" | "grounded",
-	Clip: string,
-	LayerBackend: AnimGraph.RobloxLayerBackend,
-}
+type Layer = "base" | "action"
+type State = "idle" | "run"
+type Param = "speed" | "grounded"
+type Clip = string
+type LayerBackend = AnimGraph.RobloxLayerBackend
 
-type Controller = AnimGraph.AnimationController<CharacterGraphTypes>
-type DebugSnapshot = AnimGraph.AnimationControllerDebugSnapshot<CharacterGraphTypes>
+type Controller = AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
+type DebugSnapshot = AnimGraph.AnimationControllerDebugSnapshot<Layer, State, Param, LayerBackend>
 ```
 
-The bundle is a type declaration; it creates no runtime table. The named fields
-preserve the graph's layer, state, parameter, clip, and backend-data restrictions.
-The snapshot uses `Layer`, `State`, `Param`, and `LayerBackend`; it has no clip
-generic of its own. A local assigned from `controller:getDebugSnapshot()` already
-infers the snapshot type, so an explicit annotation is optional.
+These arguments preserve the graph's layer, state, parameter, clip, and
+backend-data restrictions. The snapshot takes four arguments: `Layer`, `State`,
+`Param`, and `LayerBackend`. It has no clip generic of its own. A local assigned
+from `controller:getDebugSnapshot()` already infers the snapshot type, so an
+explicit annotation is optional.
 
 `AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT>` takes four
 arguments. Its former `ParamT` argument was unused and has been removed. Parameter
@@ -44,12 +42,7 @@ The constructor cannot infer those names from its inputs. Specialize its functio
 type once when constructing a graph with a specific parameter vocabulary:
 
 ```luau
-type Config = AnimGraph.AnimationControllerConfig<
-	index<CharacterGraphTypes, "Layer">,
-	index<CharacterGraphTypes, "State">,
-	index<CharacterGraphTypes, "Clip">,
-	index<CharacterGraphTypes, "LayerBackend">
->
+type Config = AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend>
 local newController = AnimGraph.new :: (Config) -> Controller
 local controller = newController({
 	backend = backend,
@@ -58,10 +51,11 @@ local controller = newController({
 })
 ```
 
-When upgrading annotations, replace the controller's five arguments and the
-snapshot's four arguments with the named bundle, and remove the third argument
-from `AnimationControllerConfig`. Motion and backend types retain their existing
-individual generic arguments.
+When migrating from the temporary `GraphTypes` bundle, pass its fields as the
+controller's five arguments and the snapshot's four arguments shown above. Keep
+the four-argument `AnimationControllerConfig`; consumers of its older five-argument
+form should remove the third argument (`ParamT`). Motion and backend types retain
+their existing individual generic arguments.
 
 ## Timing contract
 

@@ -6,15 +6,8 @@ type State = "idle"
 type Param = "speed"
 type Clip = "idleClip"
 
-type GraphTypes = {
-	Layer: Layer,
-	State: State,
-	Param: Param,
-	Clip: Clip,
-	LayerBackend: AnimGraph.RobloxLayerBackend,
-}
-type Controller = AnimGraph.AnimationController<GraphTypes>
-type DebugSnapshot = AnimGraph.AnimationControllerDebugSnapshot<GraphTypes>
+type Controller = AnimGraph.AnimationController<Layer, State, Param, Clip, AnimGraph.RobloxLayerBackend>
+type DebugSnapshot = AnimGraph.AnimationControllerDebugSnapshot<Layer, State, Param, AnimGraph.RobloxLayerBackend>
 
 local function createController(
 	backend: AnimGraph.AnimationBackend<Layer, State, Clip, AnimGraph.RobloxLayerBackend>,

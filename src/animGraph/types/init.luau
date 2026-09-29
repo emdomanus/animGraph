@@ -32,10 +32,10 @@ export type AnimationEventCallback<LayerT, StateT> = EventBusTypes.AnimationEven
 
 export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> =
 	AnimationControllerTypes.AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT>
-export type AnimationControllerDebugSnapshot<GraphTypes> = AnimationControllerTypes.AnimationControllerDebugSnapshot<
-	GraphTypes
->
-export type AnimationController<GraphTypes> = AnimationControllerTypes.AnimationController<GraphTypes>
+export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> =
+	AnimationControllerTypes.AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>
+export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
+	AnimationControllerTypes.AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
 	AnimationControllerTypes.AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 

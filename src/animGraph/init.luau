@@ -25,8 +25,15 @@ export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = Ty
 	ClipT,
 	LayerBackendT
 >
-export type AnimationControllerDebugSnapshot<GraphTypes> = Types.AnimationControllerDebugSnapshot<GraphTypes>
-export type AnimationController<GraphTypes> = Types.AnimationController<GraphTypes>
+export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> =
+	Types.AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>
+export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationController<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+>
 export type LayerDefinition<LayerT, LayerBackendT> = Types.LayerDefinition<LayerT, LayerBackendT>
 export type LayerPlayOptions<StateT, LayerBackendT> = Types.LayerPlayOptions<StateT, LayerBackendT>
 export type MotionRequestOverrides<LayerBackendT> = Types.MotionRequestOverrides<LayerBackendT>

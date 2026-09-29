@@ -57,7 +57,10 @@ local worldReader: AnimGraph.TimeReader = function(sampleTime: number): AnimGrap
 	}
 end
 
-local controller: AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend> = AnimGraph.new({
+type Controller = AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
+type Config = AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend>
+local newController = AnimGraph.new :: (Config) -> Controller
+local controller = newController({
 	backend = backend,
 	timeReader = worldReader,
 	layers = {

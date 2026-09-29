@@ -17,16 +17,16 @@ See [Definitions](/api/types/definitions).
 ## Controller and Events
 
 - `AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT>`
-- `AnimationControllerDebugSnapshot<GraphTypes>`
-- `AnimationController<GraphTypes>`
+- `AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>`
+- `AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>`
 - `AnimationEventName`
 - `AnimationEvent<LayerT, StateT>`
 - `AnimationEventCallback<LayerT, StateT>`
 - `ParameterValue`
 
-The controller and snapshot share a named `GraphTypes` bundle. See
-[Controller types](/api/controllers/animationController#controller-types) for the
-fields and migration from the previous positional arguments.
+The controller and snapshot use individual generic arguments. See
+[Controller types](/api/controllers/animationController#controller-types) for
+consumer aliases, constructor specialization, and migration notes.
 
 ## Layers and Motions
 
