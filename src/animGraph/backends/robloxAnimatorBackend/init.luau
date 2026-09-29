@@ -110,6 +110,7 @@ function RobloxAnimatorBackend.new<LayerT, StateT, ClipT>(
 	self._pendingCompletions = {}
 	self._nextGeneration = 0
 	self._applyDepth = 0
+	self._spareTouched = {}
 	self._dispatchingCompletions = false
 	self._lifecycleEpoch = 0
 	self._warnings = {}
@@ -317,7 +318,7 @@ function RobloxAnimatorBackend._flushCompletions<LayerT, StateT, ClipT>(self: Ro
 	StateT,
 	ClipT
 >): ()
-	if self._applyDepth > 0 or self._dispatchingCompletions then
+	if self._applyDepth > 0 or self._dispatchingCompletions or #self._pendingCompletions == 0 then
 		return
 	end
 
@@ -367,9 +368,9 @@ function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 	self._lastSampleTime = sampleTime
 
 	self._applyDepth += 1
+	local touched = self._spareTouched or {}
+	self._spareTouched = nil
 	local applied, resultOrError = pcall(function(): unknown
-		local touched: { [string]: true } = {}
-
 		for _, request in requests do
 			local trackKey = request.trackKey
 			touched[trackKey] = true
@@ -406,33 +407,45 @@ function RobloxAnimatorBackend.apply<LayerT, StateT, ClipT>(
 			end
 		end
 
-		local absentActive: { Playback<LayerT, StateT, ClipT> } = {}
+		local absentActive: { Playback<LayerT, StateT, ClipT> }? = nil
 		for trackKey, playback in self._active do
 			if not touched[trackKey] then
-				absentActive[#absentActive + 1] = playback
+				local absent: { Playback<LayerT, StateT, ClipT> } = absentActive or {}
+				absent[#absent + 1] = playback
+				absentActive = absent
 			end
 		end
-		for _, playback in absentActive do
-			self:_retire(playback, self._defaultFadeOut)
+		if absentActive ~= nil then
+			for _, playback in absentActive do
+				self:_retire(playback, self._defaultFadeOut)
+			end
 		end
 
-		local absentTombstones: { Types.CompletedTombstone<LayerT, StateT, ClipT> } = {}
+		local absentTombstones: { Types.CompletedTombstone<LayerT, StateT, ClipT> }? = nil
 		for trackKey, tombstone in self._completed do
 			if not touched[trackKey] then
-				absentTombstones[#absentTombstones + 1] = tombstone
+				local absent: { Types.CompletedTombstone<LayerT, StateT, ClipT> } = absentTombstones or {}
+				absent[#absent + 1] = tombstone
+				absentTombstones = absent
 			end
 		end
-		for _, tombstone in absentTombstones do
-			self._completed[tombstone.trackKey] = nil
-			local completedPhysical = self._physical[tombstone.generation] :: Playback<LayerT, StateT, ClipT>?
-			if completedPhysical ~= nil then
-				self:_retire(completedPhysical, self._defaultFadeOut)
+		if absentTombstones ~= nil then
+			for _, tombstone in absentTombstones do
+				self._completed[tombstone.trackKey] = nil
+				local completedPhysical = self._physical[tombstone.generation] :: Playback<LayerT, StateT, ClipT>?
+				if completedPhysical ~= nil then
+					self:_retire(completedPhysical, self._defaultFadeOut)
+				end
 			end
 		end
 		return nil
 	end)
 
 	self._applyDepth -= 1
+	table.clear(touched)
+	if self._spareTouched == nil then
+		self._spareTouched = touched
+	end
 	if not applied then
 		error(resultOrError, 0)
 	end

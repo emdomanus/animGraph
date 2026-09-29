@@ -4,6 +4,16 @@
 
 local MotionNodeTypes = require(script.Parent.motionNode)
 
+export type Blend2DCandidate = {
+	index: number,
+	distanceSquared: number,
+}
+
+export type Blend2DEvaluationScratch = {
+	weights: { number },
+	candidates: { Blend2DCandidate },
+}
+
 export type Blend2DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	x: number,
 	y: number,
@@ -26,18 +36,24 @@ export type Blend2DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> = MotionNo
 	LayerBackendT
 >
 
-export type Blend2DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Blend2DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> & {
-		_parameterX: ParamT,
-		_parameterY: ParamT,
-		_name: string,
-		_defaultX: number,
-		_defaultY: number,
-		_maxInfluences: number,
-		_samples: { Blend2DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
-		_lastX: number,
-		_lastY: number,
-		_lastWeights: { number },
-	}
+export type Blend2DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Blend2DNode<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+> & {
+	_parameterX: ParamT,
+	_parameterY: ParamT,
+	_name: string,
+	_defaultX: number,
+	_defaultY: number,
+	_maxInfluences: number,
+	_samples: { Blend2DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	_lastX: number,
+	_lastY: number,
+	_lastWeights: { number },
+	_spareEvaluationScratch: Blend2DEvaluationScratch?,
+}
 
 return {}

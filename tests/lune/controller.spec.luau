@@ -110,11 +110,12 @@ local function sample(position: number, rate: number?): any
 end
 
 local function makeMotion(trackKey: string, clip: string, speed: number, observations: any?): any
-	local state = observations or {
-		evaluations = 0,
-		timePositions = {} :: { number },
-		timeRates = {} :: { number },
-	}
+	local state = observations
+		or {
+			evaluations = 0,
+			timePositions = {} :: { number },
+			timeRates = {} :: { number },
+		}
 
 	return {
 		evaluate = function(_, context)
@@ -174,6 +175,54 @@ local ok, result = pcall(function(): number
 		print(`PASS controller: {name}`)
 	end
 
+	test("parameter defaults are available to the first evaluation and owned per controller", function(): ()
+		local defaults = { speed = 2, grounded = true, stance = "standing", attack = true }
+		local config = {
+			backend = newBackend(),
+			timeReader = function(time): any
+				return sample(time)
+			end,
+			layers = { { id = "base" } },
+			parameterDefaults = defaults,
+		}
+		local first = AnimationController.new(config)
+		config.backend = newBackend()
+		local second = AnimationController.new(config)
+		defaults.speed = 99
+		local observed = { parameter = "speed", evaluations = 0 }
+		local motion = makeMotion("base/idle", "idle", 1, observed)
+		local evaluate = motion.evaluate
+		motion.evaluate = function(self, context)
+			assert(context.getParameter("grounded") == true, "boolean default missing")
+			assert(context.getParameter("stance") == "standing", "string default missing")
+			assert(not context.consumeTrigger("attack"), "boolean default armed a trigger")
+			return evaluate(self, context)
+		end
+		first:play("base", motion)
+		first:update(0)
+		assert(observed.parameterValues[1] == 2, "defaults were aliased or unavailable on first evaluation")
+		first:setFloat("speed", 5)
+		first:update(1)
+		assert(observed.parameterValues[2] == 5, "queued setter did not override default")
+		assert(second:getDebugSnapshot().parameters.speed == 2, "controllers share parameter values")
+		assert(defaults.speed == 99, "controller mutated caller defaults")
+		first:clear()
+		assert(next(first:getDebugSnapshot().parameters) == nil, "clear restored construction defaults")
+		first:destroy()
+		second:destroy()
+	end)
+
+	test("omitted parameter defaults keep the store empty", function(): ()
+		local controller = AnimationController.new({
+			backend = newBackend(),
+			timeReader = function(time): any
+				return sample(time)
+			end,
+		})
+		assert(next(controller:getDebugSnapshot().parameters) == nil, "omitted defaults seeded values")
+		controller:destroy()
+	end)
+
 	test("samples each distinct reader once at the explicit coordinate", function(): ()
 		local backend = newBackend()
 		local calls = 0
@@ -199,7 +248,10 @@ local ok, result = pcall(function(): number
 		assert(backend.applyCount == 2, "stationary coordinate skipped backend apply")
 		assert(backend.sampleTimes[1] == 40 and backend.sampleTimes[2] == 40, "backend received a different coordinate")
 		assert(backend.batches[1][1].timePosition == 5 and backend.batches[1][1].timeRate == -0.5, "sample was split")
-		assert(backend.batches[1][2].timePosition == 5 and backend.batches[1][2].timeRate == -0.5, "sample was not shared")
+		assert(
+			backend.batches[1][2].timePosition == 5 and backend.batches[1][2].timeRate == -0.5,
+			"sample was not shared"
+		)
 	end)
 
 	test("uses active-play then layer then controller reader precedence", function(): ()
@@ -305,9 +357,12 @@ local ok, result = pcall(function(): number
 			end,
 			layers = {
 				{ id = "base" },
-				{ id = "action", timeReader = function(_sampleTime: number): any
-					return action
-				end },
+				{
+					id = "action",
+					timeReader = function(_sampleTime: number): any
+						return action
+					end,
+				},
 			},
 		})
 		controller:play("base", makeMotion("base", "idle", 1, baseObservations))
@@ -328,7 +383,10 @@ local ok, result = pcall(function(): number
 		action = sample(2)
 		controller:update(1)
 		assert(controller:getBool("armed"), "queued commands did not survive invalid reader batch")
-		assert(baseObservations.timePositions[1] == 1 and actionObservations.timePositions[1] == 2, "reader positions were not literal")
+		assert(
+			baseObservations.timePositions[1] == 1 and actionObservations.timePositions[1] == 2,
+			"reader positions were not literal"
+		)
 	end)
 
 	test("stages controller-default reader replacement and uses its literal coordinate", function(): ()
@@ -555,19 +613,28 @@ local ok, result = pcall(function(): number
 		})
 		controller:play("base", machine)
 		controller:update(0)
-		assert(machine:getDebugSnapshot().details.transition.progress == 0, "transition did not start at its time anchor")
+		assert(
+			machine:getDebugSnapshot().details.transition.progress == 0,
+			"transition did not start at its time anchor"
+		)
 		timePosition = 21
 		controller:update(1)
 		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "transition did not sample time position")
 		controller:setFloat("irrelevant", 1)
 		controller:update(1)
-		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "same-coordinate command advanced transition")
+		assert(
+			machine:getDebugSnapshot().details.transition.progress == 0.5,
+			"same-coordinate command advanced transition"
+		)
 		timePosition = 10
 		controller:update(2)
 		assert(machine:getDebugSnapshot().details.transition.progress == 0.5, "backward time rolled transition back")
 		timePosition = 10.5
 		controller:update(3)
-		assert(machine:getDebugSnapshot().details.transition.progress == 0.75, "transition stalled behind its old anchor")
+		assert(
+			machine:getDebugSnapshot().details.transition.progress == 0.75,
+			"transition stalled behind its old anchor"
+		)
 	end)
 
 	test("replaying an active state machine does not regress transition progress", function(): ()

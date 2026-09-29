@@ -34,49 +34,53 @@ export type CompletedTombstone<LayerT, StateT, ClipT> = {
 	generation: number,
 }
 
-export type RobloxAnimatorBackend<LayerT, StateT, ClipT> =
-	AnimationBackendTypes.AnimationBackend<LayerT, StateT, ClipT, RobloxLayerBackend>
+export type RobloxAnimatorBackend<LayerT, StateT, ClipT> = AnimationBackendTypes.AnimationBackend<
+	LayerT,
+	StateT,
+	ClipT,
+	RobloxLayerBackend
+>
 
-export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> =
-	RobloxAnimatorBackend<LayerT, StateT, ClipT> & {
-		_animator: Animator,
-		_resolveAssetId: (clip: ClipT) -> AssetId,
-		_defaultFadeOut: number,
-		_defaultPriority: Enum.AnimationPriority,
-		_priorityBands: { LogicalPriorityBand },
-		_positionMode: AnimationBackendTypes.BackendPositionMode,
-		_capabilities: AnimationBackendTypes.BackendCapabilities,
-		_lastSampleTime: number?,
-		_active: { [string]: any },
-		_physical: { [number]: any },
-		_retiring: { [number]: any },
-		_completed: { [string]: CompletedTombstone<LayerT, StateT, ClipT> },
-		_completionListeners: { (event: DefTypes.TrackCompletedEvent<LayerT, StateT>) -> () },
-		_pendingCompletions: { DefTypes.TrackCompletedEvent<LayerT, StateT> },
-		_nextGeneration: number,
-		_applyDepth: number,
-		_dispatchingCompletions: boolean,
-		_lifecycleEpoch: number,
-		_warnings: { string },
-		_destroyed: boolean,
+export type RobloxAnimatorBackendImpl<LayerT, StateT, ClipT> = RobloxAnimatorBackend<LayerT, StateT, ClipT> & {
+	_animator: Animator,
+	_resolveAssetId: (clip: ClipT) -> AssetId,
+	_defaultFadeOut: number,
+	_defaultPriority: Enum.AnimationPriority,
+	_priorityBands: { LogicalPriorityBand },
+	_positionMode: AnimationBackendTypes.BackendPositionMode,
+	_capabilities: AnimationBackendTypes.BackendCapabilities,
+	_lastSampleTime: number?,
+	_active: { [string]: any },
+	_physical: { [number]: any },
+	_retiring: { [number]: any },
+	_completed: { [string]: CompletedTombstone<LayerT, StateT, ClipT> },
+	_completionListeners: { (event: DefTypes.TrackCompletedEvent<LayerT, StateT>) -> () },
+	_pendingCompletions: { DefTypes.TrackCompletedEvent<LayerT, StateT> },
+	_nextGeneration: number,
+	_applyDepth: number,
+	_spareTouched: { [string]: true }?,
+	_dispatchingCompletions: boolean,
+	_lifecycleEpoch: number,
+	_warnings: { string },
+	_destroyed: boolean,
 
-		_mapPriority: (
-			self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
-			request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
-		) -> Enum.AnimationPriority,
-		_materialize: (
-			self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
-			sampleTime: number,
-			request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
-			robloxPriority: Enum.AnimationPriority
-		) -> any,
-		_retire: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, playback: any, fadeTime: number) -> (),
-		_complete: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, playback: any) -> (),
-		_handleStopped: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
-		_handleEnded: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
-		_cleanupPhysical: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
-		_clearPhysical: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>) -> (),
-		_flushCompletions: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>) -> (),
-	}
+	_mapPriority: (
+		self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
+	) -> Enum.AnimationPriority,
+	_materialize: (
+		self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>,
+		sampleTime: number,
+		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
+		robloxPriority: Enum.AnimationPriority
+	) -> any,
+	_retire: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, playback: any, fadeTime: number) -> (),
+	_complete: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, playback: any) -> (),
+	_handleStopped: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
+	_handleEnded: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
+	_cleanupPhysical: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>, generation: number) -> (),
+	_clearPhysical: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>) -> (),
+	_flushCompletions: (self: RobloxAnimatorBackendImpl<LayerT, StateT, ClipT>) -> (),
+}
 
 return {}

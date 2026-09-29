@@ -50,10 +50,13 @@ local function computeWeights<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 			LayerBackendT
 		>
 	},
-	value: number
+	value: number,
+	weights: { number }
 ): { number }
 	local count = #samples
-	local weights = table.create(count, 0)
+	for index = 1, count do
+		weights[index] = 0
+	end
 
 	if count == 0 then
 		return weights
@@ -126,6 +129,7 @@ function Blend1DNode.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._samples = samples
 	self._lastValue = self._defaultValue
 	self._lastWeights = table.create(#samples, 0)
+	self._spareWeights = self._lastWeights
 
 	return self
 end
@@ -154,7 +158,10 @@ function Blend1DNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	>
 }
 	local value = readNumber(context.getParameter(self._parameter), self._defaultValue)
-	local weights = computeWeights(self._samples, value)
+	local weights = self._spareWeights or table.create(#self._samples, 0)
+	-- Lease the array before calling children; nested evaluation needs its own weights.
+	self._spareWeights = nil
+	computeWeights(self._samples, value, weights)
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
 
 	self._lastValue = value
@@ -171,6 +178,9 @@ function Blend1DNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		end
 	end
 
+	if self._spareWeights == nil then
+		self._spareWeights = weights
+	end
 	return requests
 end
 

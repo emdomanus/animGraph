@@ -13,15 +13,46 @@ local function createController(
 	backend: AnimGraph.AnimationBackend<Layer, State, Clip, AnimGraph.RobloxLayerBackend>,
 	reader: AnimGraph.TimeReader
 ): Controller
-	local config: AnimGraph.AnimationControllerConfig<Layer, State, Clip, AnimGraph.RobloxLayerBackend> = {
+	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, AnimGraph.RobloxLayerBackend> = {
 		backend = backend,
 		timeReader = reader,
 	}
-	local newController = AnimGraph.new :: (
-		AnimGraph.AnimationControllerConfig<Layer, State, Clip, AnimGraph.RobloxLayerBackend>
-	) -> Controller
-	local controller: Controller = newController(config)
+	local controller: Controller = AnimGraph.new(config)
 	return controller
+end
+
+local function createWithDefaults(
+	backend: AnimGraph.AnimationBackend<Layer, State, Clip, AnimGraph.RobloxLayerBackend>,
+	reader: AnimGraph.TimeReader
+)
+	local defaults: { [Param]: AnimGraph.ParameterValue } = { speed = 0 }
+	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, AnimGraph.RobloxLayerBackend> = {
+		backend = backend,
+		timeReader = reader,
+		parameterDefaults = defaults,
+	}
+	local controller = AnimGraph.new(config)
+	local checked: Controller = controller
+	return checked
+end
+
+local function createWithLiteralDefaults(
+	backend: AnimGraph.AnimationBackend<
+		Layer,
+		State,
+		Clip,
+		AnimGraph.RobloxLayerBackend
+	>,
+	reader: AnimGraph.TimeReader
+)
+	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, AnimGraph.RobloxLayerBackend> = {
+		backend = backend,
+		timeReader = reader,
+		parameterDefaults = { speed = 0 },
+	}
+	local controller = AnimGraph.new(config)
+	local checked: Controller = controller
+	return checked
 end
 
 local function check(controller: Controller, reader: AnimGraph.TimeReader)
@@ -38,4 +69,9 @@ local function check(controller: Controller, reader: AnimGraph.TimeReader)
 	controller:destroy()
 	return layer, state, parameter, layerBackend
 end
-return { createController = createController, check = check }
+return {
+	createController = createController,
+	createWithDefaults = createWithDefaults,
+	createWithLiteralDefaults = createWithLiteralDefaults,
+	check = check,
+}

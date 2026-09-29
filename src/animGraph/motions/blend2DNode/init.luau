@@ -34,10 +34,8 @@ export type Blend2DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Type
 	LayerBackendT
 >
 
-type Candidate = {
-	index: number,
-	distanceSquared: number,
-}
+type Blend2DCandidate = Types.Blend2DCandidate
+type Blend2DEvaluationScratch = Types.Blend2DEvaluationScratch
 
 local EPSILON = 1e-6
 local DEFAULT_MAX_INFLUENCES = 4
@@ -58,15 +56,19 @@ local function computeWeights<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	},
 	x: number,
 	y: number,
-	maxInfluences: number
+	maxInfluences: number,
+	scratch: Blend2DEvaluationScratch
 ): { number }
 	local count = #samples
-	local weights = table.create(count, 0)
+	local weights = scratch.weights
+	for index = 1, count do
+		weights[index] = 0
+	end
 	if count == 0 then
 		return weights
 	end
 
-	local candidates = table.create(count) :: { Candidate }
+	local candidates = scratch.candidates
 	for index, sample in samples do
 		local dx = x - sample.x
 		local dy = y - sample.y
@@ -76,13 +78,17 @@ local function computeWeights<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 			return weights
 		end
 
-		candidates[#candidates + 1] = {
-			index = index,
-			distanceSquared = distanceSquared,
-		}
+		-- Reset sample order before sorting, including after exact-hit early returns.
+		local candidate = candidates[index]
+		if candidate == nil then
+			candidates[index] = { index = index, distanceSquared = distanceSquared }
+		else
+			candidate.index = index
+			candidate.distanceSquared = distanceSquared
+		end
 	end
 
-	table.sort(candidates, function(left: Candidate, right: Candidate)
+	table.sort(candidates, function(left: Blend2DCandidate, right: Blend2DCandidate)
 		return left.distanceSquared < right.distanceSquared
 	end)
 
@@ -137,6 +143,7 @@ function Blend2DNode.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._lastX = self._defaultX
 	self._lastY = self._defaultY
 	self._lastWeights = table.create(#self._samples, 0)
+	self._spareEvaluationScratch = { weights = self._lastWeights, candidates = {} }
 
 	return self
 end
@@ -166,7 +173,10 @@ function Blend2DNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 }
 	local x = readNumber(context.getParameter(self._parameterX), self._defaultX)
 	local y = readNumber(context.getParameter(self._parameterY), self._defaultY)
-	local weights = computeWeights(self._samples, x, y, self._maxInfluences)
+	local scratch = self._spareEvaluationScratch or { weights = table.create(#self._samples, 0), candidates = {} }
+	-- Child callbacks may re-enter this node. Never share an in-flight workspace.
+	self._spareEvaluationScratch = nil
+	local weights = computeWeights(self._samples, x, y, self._maxInfluences, scratch)
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
 
 	self._lastX = x
@@ -184,6 +194,9 @@ function Blend2DNode.evaluate<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 		end
 	end
 
+	if self._spareEvaluationScratch == nil then
+		self._spareEvaluationScratch = scratch
+	end
 	return requests
 end
 

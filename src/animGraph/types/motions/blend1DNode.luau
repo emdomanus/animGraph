@@ -23,14 +23,20 @@ export type Blend1DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> = MotionNo
 	LayerBackendT
 >
 
-export type Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> =
-	Blend1DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT> & {
-		_parameter: ParamT,
-		_name: string,
-		_defaultValue: number,
-		_samples: { Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
-		_lastValue: number,
-		_lastWeights: { number },
-	}
+export type Blend1DNodeImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Blend1DNode<
+	LayerT,
+	StateT,
+	ParamT,
+	ClipT,
+	LayerBackendT
+> & {
+	_parameter: ParamT,
+	_name: string,
+	_defaultValue: number,
+	_samples: { Blend1DSample<LayerT, StateT, ParamT, ClipT, LayerBackendT> },
+	_lastValue: number,
+	_lastWeights: { number },
+	_spareWeights: { number }?,
+}
 
 return {}

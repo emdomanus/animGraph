@@ -19,9 +19,10 @@ export type TrackCompletedEvent<LayerT, StateT> = Types.TrackCompletedEvent<Laye
 export type AnimationEventName = Types.AnimationEventName
 export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT>
 export type AnimationEventCallback<LayerT, StateT> = Types.AnimationEventCallback<LayerT, StateT>
-export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
+export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
 	LayerT,
 	StateT,
+	ParamT,
 	ClipT,
 	LayerBackendT
 >

@@ -16,7 +16,7 @@ See [Definitions](/api/types/definitions).
 
 ## Controller and Events
 
-- `AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT>`
+- `AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>`
 - `AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT>`
 - `AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>`
 - `AnimationEventName`

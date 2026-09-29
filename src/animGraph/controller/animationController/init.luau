@@ -14,9 +14,10 @@ local LayerRuntimeTypes = require(script.Parent.Parent.types.runtime.layerRuntim
 local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 local ParameterStoreTypes = require(script.Parent.Parent.types.controller.parameterStore)
 
-export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
+export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
 	LayerT,
 	StateT,
+	ParamT,
 	ClipT,
 	LayerBackendT
 >
@@ -169,6 +170,7 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	config: AnimationControllerConfig<
 		LayerT,
 		StateT,
+		ParamT,
 		ClipT,
 		LayerBackendT
 	>
@@ -190,8 +192,17 @@ function AnimationController.new<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 	self._pendingCommands = {}
 	self._layers = {}
 	self._layerOrder = {}
-	self._parameters = ParameterStore.new() :: any
+	self._parameters = ParameterStore.new(config.parameterDefaults)
 	self._eventBus = EventBus.new() :: any
+	self._readParameter = function(parameter: ParamT): ParameterStoreTypes.ParameterValue?
+		return self._parameters:get(parameter)
+	end
+	self._consumeTrigger = function(parameter: ParamT): boolean
+		return self._parameters:consumeTrigger(parameter)
+	end
+	self._emitEvent = function(event)
+		self._eventBus:emit(event)
+	end
 	self._lifecycleEpoch = 0
 	self._destroyed = false
 	self._releaseBackendCompletion = nil
@@ -728,10 +739,12 @@ local function finalDefaultReader<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 			ClipT,
 			LayerBackendT
 		>
-	}
+	},
+	commandCount: number
 ): DefTypes.TimeReader
 	local reader = self._timeReader
-	for _, command in commands do
+	for index = 1, commandCount do
+		local command = commands[index]
 		if command.kind == "setDefaultTimeReader" then
 			reader = command.reader
 		end
@@ -758,6 +771,7 @@ local function readLayerTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 			LayerBackendT
 		>
 	},
+	commandCount: number,
 	sampleTime: number,
 	samplesByReader: {
 		[DefTypes.TimeReader]: DefTypes.TimeSample,
@@ -768,7 +782,8 @@ local function readLayerTimeSample<LayerT, StateT, ParamT, ClipT, LayerBackendT>
 	local layerReader = layerRuntime._timeReader
 	local playReader = layerRuntime._playTimeReader
 
-	for _, command in commands do
+	for index = 1, commandCount do
+		local command = commands[index]
 		if command.kind == "play" and command.layer == layer then
 			playing = true
 			playReader = if command.options ~= nil then command.options.timeReader else nil
@@ -819,10 +834,12 @@ local function commitCommands<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
 			ClipT,
 			LayerBackendT
 		>
-	}
+	},
+	commandCount: number
 ): { PendingBackendStop<LayerT> }
 	local backendStops: { PendingBackendStop<LayerT> } = {}
-	for _, command in commands do
+	for index = 1, commandCount do
+		local command = commands[index]
 		if command.kind == "play" then
 			requireLayer(self, command.layer):play(command.motion, command.options)
 		elseif command.kind == "stop" then
@@ -875,11 +892,9 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 
 	local pendingCommands = self._pendingCommands
 	local commandCount = #pendingCommands
-	local commands = table.create(commandCount) :: { GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> }
-	for index = 1, commandCount do
-		commands[index] = pendingCommands[index]
-	end
-	local defaultReader = finalDefaultReader(self, commands)
+	-- Commands are append-only; a fixed prefix preserves the update snapshot without copying it.
+	local commands = pendingCommands
+	local defaultReader = finalDefaultReader(self, commands, commandCount)
 	local samplesByReader: { [DefTypes.TimeReader]: DefTypes.TimeSample } = {}
 	local samplesByLayer: { [LayerT]: DefTypes.TimeSample } = {}
 	local updateInvalidated = function(): boolean
@@ -894,6 +909,7 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 				layerRuntime,
 				defaultReader,
 				commands,
+				commandCount,
 				sampleTime,
 				samplesByReader,
 				updateInvalidated
@@ -912,7 +928,7 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 		nextCommands[#nextCommands + 1] = pendingCommands[index]
 	end
 	self._pendingCommands = nextCommands
-	local backendStops = commitCommands(self, commands)
+	local backendStops = commitCommands(self, commands, commandCount)
 	self._lastSampleTime = sampleTime
 
 	for _, stop in backendStops do
@@ -923,21 +939,13 @@ function AnimationController.update<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	end
 
 	local requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> } = {}
-	local getParameter = function(parameter: ParamT): any
-		return self._parameters:get(parameter)
-	end
-	local consumeTrigger = function(parameter: ParamT): boolean
-		return self._parameters:consumeTrigger(parameter)
-	end
-	local emitEvent = function(event: any): ()
-		self._eventBus:emit(event)
-	end
 
 	for _, layer in self._layerOrder do
 		local layerRuntime = self._layers[layer]
 		local timeSample = samplesByLayer[layer]
 		if layerRuntime ~= nil and timeSample ~= nil then
-			local layerRequests = layerRuntime:evaluate(timeSample, getParameter, consumeTrigger, emitEvent)
+			local layerRequests =
+				layerRuntime:evaluate(timeSample, self._readParameter, self._consumeTrigger, self._emitEvent)
 			if updateWasInvalidated(self, lifecycleEpoch) then
 				return
 			end

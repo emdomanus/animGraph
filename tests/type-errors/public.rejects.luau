@@ -29,4 +29,21 @@ local function reject(
 	local reader: AnimGraph.TimeReader = invalidReader -- EXPECT_ERROR
 	return position, reader, wrongLayer, wrongState, wrongValue
 end
-return reject
+local function rejectDefaults(
+	backend: AnimGraph.AnimationBackend<Layer, State, Clip, AnimGraph.RobloxLayerBackend>,
+	reader: AnimGraph.TimeReader
+)
+	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, AnimGraph.RobloxLayerBackend> = {
+		backend = backend,
+		timeReader = reader,
+		parameterDefaults = { speed = 0 },
+	}
+	local controller = AnimGraph.new(config)
+	controller:setFloat("unknownParameter", 1) -- EXPECT_ERROR
+	local defaults = config.parameterDefaults
+	assert(defaults ~= nil)
+	defaults["speed" :: Param] = Vector3.new() -- EXPECT_ERROR
+	defaults["unknownParameter"] = 0 -- EXPECT_ERROR
+end
+
+return { reject = reject, rejectDefaults = rejectDefaults }

@@ -2011,14 +2011,14 @@ local function setupController(animator: Animator): ()
 		},
 	}
 
-	local config: AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend> = {
+	local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 		backend = backend,
 		timeReader = baseTimeReader,
 		layers = layerDefinitions,
 	}
 
 	local newController = AnimGraph.new :: (
-		AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend>
+		AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend>
 	) -> AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
 	controller = newController(config)
 

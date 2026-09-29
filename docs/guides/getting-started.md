@@ -31,16 +31,17 @@ local worldReader: AnimGraph.TimeReader = function(sampleTime: number): AnimGrap
 end
 
 type Controller = AnimGraph.AnimationController<Layer, State, Param, Clip, LayerBackend>
-type Config = AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend>
-local newController = AnimGraph.new :: (Config) -> Controller
-local controller = newController({
+type Config = AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend>
+local config: Config = {
 	backend = backend,
 	timeReader = worldReader,
+	parameterDefaults = { speed = 0 },
 	layers = {
 		{ id = "base", logicalPriority = 0 },
 		{ id = "action", logicalPriority = 100 },
 	},
-})
+}
+local controller: Controller = AnimGraph.new(config)
 
 controller:play("base", AnimGraph.blend1D("speed", {
 	samples = {

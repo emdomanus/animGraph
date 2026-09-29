@@ -17,9 +17,10 @@ export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT
 export type AnimationEventCallback<LayerT, StateT> = Types.AnimationEventCallback<LayerT, StateT>
 export type SpeedModifierMode = Types.SpeedModifierMode
 export type SpeedModifierOptions = Types.SpeedModifierOptions
-export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
+export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.AnimationControllerConfig<
 	LayerT,
 	StateT,
+	ParamT,
 	ClipT,
 	LayerBackendT
 >

@@ -9,10 +9,11 @@ local LayerRuntimeTypes = require(script.Parent.Parent.runtime.layerRuntime)
 local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
 local ParameterStoreTypes = require(script.Parent.parameterStore)
 
-export type AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT> = {
+export type AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 	backend: BackendTypes.AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 	timeReader: DefTypes.TimeReader,
 	layers: { LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT> }?,
+	parameterDefaults: { [ParamT]: ParameterStoreTypes.ParameterValue }?,
 }
 
 export type AnimationControllerDebugSnapshot<LayerT, StateT, ParamT, LayerBackendT> = {
@@ -210,6 +211,9 @@ export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	_layerOrder: { LayerT },
 	_parameters: ParameterStoreTypes.ParameterStoreImpl<ParamT>,
 	_eventBus: EventBusTypes.EventBusImpl<LayerT, StateT>,
+	_readParameter: (parameter: ParamT) -> ParameterStoreTypes.ParameterValue?,
+	_consumeTrigger: (parameter: ParamT) -> boolean,
+	_emitEvent: EventBusTypes.AnimationEventCallback<LayerT, StateT>,
 	_releaseBackendCompletion: DefTypes.Release?,
 	_lifecycleEpoch: number,
 	_destroyed: boolean,

@@ -3,15 +3,23 @@
 Source: `src/animGraph/controller/animationController/init.luau`
 
 ```luau
-local controller = AnimGraph.new({
+local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {
 	backend = backend,
 	timeReader = defaultReader,
 	layers = layerDefinitions,
-})
+	parameterDefaults = { speed = 0, grounded = true },
+}
+local controller = AnimGraph.new(config)
 ```
 
 `backend` and `timeReader` are required. `layers` is optional because
 layers may be added later.
+
+`parameterDefaults` optionally seeds the parameter store with number, boolean,
+or string values. Construction copies the table once; controllers never share
+mutable parameter storage with the config or each other. Boolean defaults do not
+arm triggers. Setters can override defaults, and omitted defaults leave an empty
+store. Defaults apply only at construction: `clear()` still empties parameters.
 
 ## Controller types
 
@@ -35,27 +43,31 @@ backend-data restrictions. The snapshot takes four arguments: `Layer`, `State`,
 from `controller:getDebugSnapshot()` already infers the snapshot type, so an
 explicit annotation is optional.
 
-`AnimationControllerConfig<LayerT, StateT, ClipT, LayerBackendT>` takes four
-arguments. Its former `ParamT` argument was unused and has been removed. Parameter
-names belong to the resulting controller's type, not the construction config.
-The constructor cannot infer those names from its inputs. Specialize its function
-type once when constructing a graph with a specific parameter vocabulary:
+`AnimationControllerConfig<LayerT, StateT, ParamT, ClipT, LayerBackendT>` takes the
+same five arguments as the controller. `ParamT` types the keys of
+`parameterDefaults`. Give the config a concrete type so construction can infer
+the parameter vocabulary without a constructor cast:
 
 ```luau
-type Config = AnimGraph.AnimationControllerConfig<Layer, State, Clip, LayerBackend>
-local newController = AnimGraph.new :: (Config) -> Controller
-local controller = newController({
+type Config = AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend>
+local config: Config = {
 	backend = backend,
 	timeReader = defaultReader,
 	layers = layerDefinitions,
-})
+	parameterDefaults = { speed = 0, grounded = true },
+}
+local controller = AnimGraph.new(config)
 ```
 
+The pinned analyzer does not reliably infer literal parameter keys from an
+unannotated defaults table alone. The typed config is the supported inference
+boundary; it also works when defaults are omitted. Values remain the shared
+`ParameterValue` union rather than a different value type for each key.
+
 When migrating from the temporary `GraphTypes` bundle, pass its fields as the
-controller's five arguments and the snapshot's four arguments shown above. Keep
-the four-argument `AnimationControllerConfig`; consumers of its older five-argument
-form should remove the third argument (`ParamT`). Motion and backend types retain
-their existing individual generic arguments.
+controller/config's five arguments and the snapshot's four arguments shown above.
+Existing five-argument config consumers need no change. Consumers of the temporary
+four-argument config restore `ParamT` as its third argument.
 
 ## Timing contract
 

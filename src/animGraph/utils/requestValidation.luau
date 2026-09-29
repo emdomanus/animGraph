@@ -7,15 +7,24 @@ local MotionNodeTypes = require(script.Parent.Parent.types.motions.motionNode)
 
 local RequestValidation = {}
 
+local spareSeenTrackKeys: { [string]: true }? = {}
+
 local function assertFinite(value: number, name: string): ()
 	assert(typeof(value) == "number", name .. " must be a number")
 	assert(value == value and value > -math.huge and value < math.huge, name .. " must be finite")
 end
 
-function RequestValidation.validate<LayerT, StateT, ClipT, LayerBackendT>(
-	requests: { MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, LayerBackendT> }
-): ()
-	local seenTrackKeys: { [string]: true } = {}
+function RequestValidation.validate<LayerT, StateT, ClipT, LayerBackendT>(requests: {
+	MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		LayerBackendT
+	>
+}): ()
+	local seenTrackKeys = spareSeenTrackKeys or {}
+	-- A rejected or re-entrant validation must not expose a partially filled map.
+	spareSeenTrackKeys = nil
 
 	for _, request in requests do
 		assert(seenTrackKeys[request.trackKey] == nil, "duplicate trackKey in request batch: " .. request.trackKey)
@@ -32,6 +41,10 @@ function RequestValidation.validate<LayerT, StateT, ClipT, LayerBackendT>(
 		if request.initialPosition ~= nil then
 			AnimationPosition.assertValid(request.initialPosition)
 		end
+	end
+	table.clear(seenTrackKeys)
+	if spareSeenTrackKeys == nil then
+		spareSeenTrackKeys = seenTrackKeys
 	end
 end
 
