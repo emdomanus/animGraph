@@ -1,6 +1,6 @@
 # Blend2DNode
 
-Source: `src/animGraph/motions/blend2DNode/init.luau`
+Source: `src/animGraph/motions/blend2DNode/shared/blend2DNode.luau`
 
 `AnimGraph.blend2D(parameterX, parameterY, config)` evaluates positioned motion
 samples from two numeric parameters.

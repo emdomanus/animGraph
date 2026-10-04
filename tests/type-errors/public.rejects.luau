@@ -12,6 +12,9 @@ local function reject(
 	controller: Controller,
 	wrongMotion: AnimGraph.MotionNode<Layer, State, Param, "otherClip", AnimGraph.RobloxLayerBackend>
 )
+	local rawUpdate = AnimGraph.animationController.update -- EXPECT_ERROR
+	local rawApply = AnimGraph.robloxAnimatorBackend.apply -- EXPECT_ERROR
+	print(rawUpdate, rawApply)
 	controller:setLayerWeight("unknownLayer", 1) -- EXPECT_ERROR
 	controller:setFloat("unknownParameter", 1) -- EXPECT_ERROR
 	controller:play("body" :: Layer, wrongMotion) -- EXPECT_ERROR

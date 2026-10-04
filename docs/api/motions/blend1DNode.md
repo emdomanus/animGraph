@@ -1,6 +1,6 @@
 # Blend1DNode
 
-Source: `src/animGraph/motions/blend1DNode/init.luau`
+Source: `src/animGraph/motions/blend1DNode/shared/blend1DNode.luau`
 
 `AnimGraph.blend1D(parameter, config)` evaluates numeric threshold samples and
 scales child request weights.

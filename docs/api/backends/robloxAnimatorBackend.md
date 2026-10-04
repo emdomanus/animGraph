@@ -1,6 +1,6 @@
 # RobloxAnimatorBackend
 
-Source: `src/animGraph/backends/robloxAnimatorBackend/init.luau`
+Source: `src/animGraph/backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/init.luau`
 
 ```luau
 local backend = AnimGraph.robloxAnimatorBackend.new({

@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 -- Host benchmark: keep the runner identical for the before/after captures.
 local requireAny = require :: any
@@ -17,7 +18,7 @@ local transformed = ModuleLoader.write({
 })
 
 local ok, failure = pcall(function(): unknown
-	local AnimGraph = transformed.requireModule("animGraph/init.luau") :: any
+	local AnimGraph = transformed.requireModule("init.luau") :: any
 	local iterations = tonumber(process.env.ANIMGRAPH_BENCH_ITERATIONS) or 20000
 	local rounds = tonumber(process.env.ANIMGRAPH_BENCH_ROUNDS) or 7
 	local results = {}

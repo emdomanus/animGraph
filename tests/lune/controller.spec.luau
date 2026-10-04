@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local requireAny = require :: any
 local process = requireAny("@lune/process")
@@ -161,9 +162,12 @@ local function makeMotion(trackKey: string, clip: string, speed: number, observa
 end
 
 local ok, result = pcall(function(): number
-	local AnimationController = transformed.requireModule("animGraph/controller/animationController/init.luau") :: any
-	local ClipNode = transformed.requireModule("animGraph/motions/clipNode/init.luau") :: any
-	local StateMachineRuntime = transformed.requireModule("animGraph/runtime/stateMachineRuntime/init.luau") :: any
+	local AnimationController = transformed.requireModule(
+		"animGraph/controller/animationController/shared/animationController/init.luau"
+	) :: any
+	local ClipNode = transformed.requireModule("animGraph/motions/clipNode/shared/clipNode.luau") :: any
+	local StateMachineRuntime =
+		transformed.requireModule("animGraph/runtime/stateMachineRuntime/shared/stateMachineRuntime.luau") :: any
 	local testCount = 0
 
 	local function test(name: string, callback: () -> ()): ()

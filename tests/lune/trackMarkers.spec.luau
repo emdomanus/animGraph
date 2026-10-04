@@ -15,7 +15,7 @@ local transformed = ModuleLoader.write({
 })
 
 local ok, result = pcall(function(): number
-	local AnimGraph = transformed.requireModule("animGraph/init.luau") :: any
+	local AnimGraph = transformed.requireModule("init.luau") :: any
 	local count = 0
 	local function test(name: string, callback: () -> ())
 		local passed, failure = pcall(callback)

@@ -20,6 +20,29 @@ These items are outside the implemented absolute-time library contract.
 - Optional layer stack behavior only after repeated consumer use proves a
   package-generic contract.
 
+## Remaining Convention Work
+
+The VMMO-26 package-layout checkpoint establishes owner-level shared domains,
+mirrored type ownership, and a single root export surface. It does not claim a
+complete migration of internal object contracts. Follow-up ownership work should
+address:
+
+- Controller-to-layer private field access and concrete `Impl` dependencies;
+  define the actual timing/owned capabilities before replacing these reaches.
+- Evaluation context parameter/event callbacks and their broad types; inject
+  existing objects through appropriate capabilities instead of manufacturing
+  forwarding closures.
+- Backend playback maps and helper signatures that still use `any` despite the
+  canonical playback surface.
+- StackModifier's cross-object `_applyEntries` call and owner-only lifecycle
+  naming; agree on the replacement contract before migrating callers.
+- Mutable backend capability policy and native annotations on runtime modules
+  without a measured or computational justification.
+
+Controller decomposition and reusable evaluation output/dirty-state tracking
+remain deferred until VoxelMMO integration and profiling. They are not part of
+the path migration, and the current `evaluate`/`apply` contracts are unchanged.
+
 ## Custom Solver Research
 
 - Crunchyroll or custom pose-solver backend prototype.

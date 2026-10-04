@@ -1,6 +1,6 @@
 # AnimationController
 
-Source: `src/animGraph/controller/animationController/init.luau`
+Source: `src/animGraph/controller/animationController/shared/animationController/init.luau`
 
 ```luau
 local config: AnimGraph.AnimationControllerConfig<Layer, State, Param, Clip, LayerBackend> = {

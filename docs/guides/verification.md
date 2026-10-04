@@ -7,11 +7,11 @@ not prove behavior that depends on real `AnimationTrack` signals or timing.
 ## Deterministic suite
 
 ```powershell
-lune run tests/lune/run.luau
+pwsh -NoProfile -File scripts/verify/tests.ps1
 ```
 
-The expected baseline is **87/87 tests** across smoke, controller,
-native-Roblox-backend, and sampled-Roblox-backend seam suites. The controller
+The expected baseline is **119/119 tests** across smoke, controller, marker,
+evaluation-reuse, native-Roblox-backend, and sampled-Roblox-backend seam suites. The controller
 suite proves explicit finite/monotonic coordinates, equal-coordinate
 re-evaluation, one atomic `{ position, rate }` read per selected reader, reader
 precedence, literal position/replacement behavior, signed and zero rate, queued
@@ -32,23 +32,36 @@ absolute/relative ordering, one-write resolution, reverse position-before-speed,
 native-property preservation, stale-generation isolation, and completion
 re-entry/error cleanup. It does not create a real Roblox `Animator`.
 
+The marker suite loads the package root and exercises controller-to-backend
+delivery, specific/global subscriptions, playback identity, release, stale
+signals, reentry, and errors. The suites retain their behavioral expectations
+across the shared-domain path migration. Only their module imports change.
+
 ## Formatting, lint, and Luau analysis
 
 ```powershell
-stylua --check src dev tests
-selene src dev tests
-.\scripts\check-luau.ps1
-rojo sourcemap default.project.json --output sourcemap.json
-rojo sourcemap dev.project.json --output dev-sourcemap.json
+pwsh -NoProfile -File scripts/verify/stylua.ps1
+pwsh -NoProfile -File scripts/verify/selene.ps1
+pwsh -NoProfile -File scripts/verify/analyze.ps1 -OutDir .verification/checkpoint
+pwsh -NoProfile -File scripts/verify/type-errors.ps1 -OutDir .verification/checkpoint-type-errors
 ```
 
-StyLua checks authored formatting. Selene checks Luau lint rules. The Luau
-script regenerates the dev sourcemap, analyzes `src` and `dev` with Roblox
-definitions, and validates their require graph. The explicit default-project
-sourcemap command checks the package-root mapping as well; the explicit dev
-command makes both generated artifacts part of the recorded gate. Both
-sourcemaps are generated local state; review them for unexpected changes and do
-not treat their generated contents as documentation.
+The wrappers resolve the Rokit-pinned tools (with the documented analyzer
+override). StyLua checks authored formatting; Selene checks Luau lint rules.
+The analyzer regenerates the dev sourcemap and analyzes `src`, `dev`, and
+`tests/type-contracts` with Roblox definitions. Capture before and after source
+changes using separate output directories and compare diagnostics. The current
+baseline is zero TypeErrors and one existing development-client deprecation
+warning. The negative contract suite expects 20 rejected expressions, including
+attempts to use instance methods on constructor exports. Use a fresh output
+directory for each negative-contract capture.
+
+For source-layout changes, also generate the default-project sourcemap with
+the pinned Rojo resolved by `scripts/verify/tools.ps1`. Inspect both generated
+trees for duplicate sibling names, stale source paths, and missing modules;
+successful generation alone does not prove those properties. All package leaves
+except the host-required `src/init.luau` must have one owner-level execution
+domain. Review generated artifacts rather than hand-editing them.
 
 ## Documentation and diff checks
 
@@ -87,7 +100,7 @@ the SVG palette follows the site's light and dark appearances.
 The [Studio Verification](./studio-verification.md) page is the canonical
 record for Rojo-connected engine evidence and the historical CP-TA3, CP-AG-R,
 and CP-AG-P operator results. Studio evidence is intentionally separate from
-the current 87 deterministic tests and from static analysis. It covers native
+the current 119 deterministic tests and from static analysis. It covers native
 `AnimationTrack` length, signal order, fade timing, physical cleanup, loop
 behavior, and re-entry that host fakes cannot establish.
 

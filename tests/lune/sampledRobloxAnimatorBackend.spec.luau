@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local requireAny = require :: any
 local process = requireAny("@lune/process")
@@ -51,7 +52,9 @@ local function at(request: any, position: number, rate: number?): any
 end
 
 local ok, result = pcall(function(): number
-	local RobloxAnimatorBackend = transformed.requireModule("animGraph/backends/robloxAnimatorBackend/init.luau") :: any
+	local RobloxAnimatorBackend = transformed.requireModule(
+		"animGraph/backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/init.luau"
+	) :: any
 	local testCount = 0
 
 	local function test(name: string, callback: () -> ()): ()
@@ -122,7 +125,10 @@ local ok, result = pcall(function(): number
 		inwardBackend:apply(1, { at(inwardRequest, 1, -1) })
 		inwardBackend:apply(2, { at(inwardRequest, 0, -1) })
 		assert(inwardEvents == 0, "inward boundary completed without composed direction")
-		assert(inwardAnimator.tracks[1].calls.positionWrites[#inwardAnimator.tracks[1].calls.positionWrites] == 9, "reverse time did not leave the boundary")
+		assert(
+			inwardAnimator.tracks[1].calls.positionWrites[#inwardAnimator.tracks[1].calls.positionWrites] == 9,
+			"reverse time did not leave the boundary"
+		)
 
 		local outwardBackend = newBackend("sampledPosition", 10)
 		local outwardEvents = 0
@@ -181,7 +187,10 @@ local ok, result = pcall(function(): number
 		backend:apply(3, { at(request, 3) })
 		backend:apply(4, { at(request, 4) })
 		local writes = animator.tracks[1].calls.positionWrites
-		assert(writes[#writes - 2] == 4 and writes[#writes - 1] == 4 and writes[#writes] == 5, "physical command anchor drifted")
+		assert(
+			writes[#writes - 2] == 4 and writes[#writes - 1] == 4 and writes[#writes] == 5,
+			"physical command anchor drifted"
+		)
 	end)
 
 	test("accrues phase while clip length is unresolved", function(): ()
@@ -218,10 +227,19 @@ local ok, result = pcall(function(): number
 		backend:apply(0, { at(request, 0) })
 		local track = animator.tracks[1]
 		track:fireStopped()
-		assert(backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 2 }), "native stop stole active ownership")
+		assert(
+			backend:setTrackPosition(request.trackKey, { kind = "seconds", value = 2 }),
+			"native stop stole active ownership"
+		)
 		backend:apply(1, { at(request, 1) })
-		assert(track.calls.play == 2 and track.calls.playSpeeds[2] == 0, "sampled playback was not restored at zero rate")
-		assert(track.calls.positionWrites[#track.calls.positionWrites] == 3, "restored sampled phase used the wrong anchor")
+		assert(
+			track.calls.play == 2 and track.calls.playSpeeds[2] == 0,
+			"sampled playback was not restored at zero rate"
+		)
+		assert(
+			track.calls.positionWrites[#track.calls.positionWrites] == 3,
+			"restored sampled phase used the wrong anchor"
+		)
 	end)
 
 	test("rejects invalid and backward backend coordinates before mutation", function(): ()
@@ -303,14 +321,18 @@ local ok, result = pcall(function(): number
 		local request = newRequest()
 
 		backend:apply(0, { request })
-		assert(animator.loadCount == 0 and #backend:getDebugSnapshot().tracks == 0, "clear was undone by materialization")
+		assert(
+			animator.loadCount == 0 and #backend:getDebugSnapshot().tracks == 0,
+			"clear was undone by materialization"
+		)
 		backend:apply(0, { request })
 		assert(animator.loadCount == 1, "backend did not recover after resolver clear")
 	end)
 
 	test("nativeRate composes signed and zero time rates without position churn", function(): ()
 		local backend, animator = newBackend("nativeRate", 10)
-		local request = newRequest({ speed = -1, timeRate = -0.5, initialPosition = { kind = "normalized", value = 0.5 } })
+		local request =
+			newRequest({ speed = -1, timeRate = -0.5, initialPosition = { kind = "normalized", value = 0.5 } })
 		backend:apply(0, { request })
 		backend:apply(1, { request })
 		local track = animator.tracks[1]

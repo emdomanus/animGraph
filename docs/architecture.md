@@ -32,8 +32,9 @@ import completionDiagram from "./assets/animgraph-completion.svg";
 />
 
 The authored diagram sources are under `docs/diagrams`; generated SVGs are
-checked in under `docs/assets`. Backend-private playback objects and Roblox
-instances never cross the public boundary.
+checked in under `docs/assets`. Roblox instances and mutable playback operations
+stay private. Global marker callbacks receive the existing playback object
+through its narrow, read-only `TrackMarkerSource` contract.
 
 ## Ownership
 
@@ -62,6 +63,50 @@ consumer scheduler/readers
 Public contracts live below `src/animGraph/types`. Motion nodes know no Roblox
 types. The controller depends on the backend interface, not the Roblox
 implementation.
+
+## Source layout and package boundary
+
+All package implementation modules are available on both server and client and
+live under an owner-level `shared` domain. The Roblox backend is also shared:
+the caller supplies its Animator. The development client and host test tooling
+remain outside the deployed package source.
+
+```text
+src/init.luau                         # Pesde/Roblox package entrypoint
+src/animGraph/
+  controller/animationController/shared/animationController/
+    init.luau
+    parameterStore.luau
+    eventBus.luau
+  backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/
+    init.luau
+    animPlayback.luau
+    sampledAnimPlayback.luau
+  motions/clipNode/shared/clipNode.luau
+  runtime/layerRuntime/shared/layerRuntime.luau
+  types/                             # mirrors object ownership above
+    def/animation/shared/animation.luau
+    def/animationPlayback/shared/robloxPlayback.luau
+    ports/backends/animationPlayback/shared/trackMarkerSource.luau
+```
+
+Private children inherit their owner's domain. Objects without private children
+use a named file instead of a directory containing only `init.luau`. Canonical
+object types keep public surfaces and private implementation records together;
+the backend's private playback types mirror its implementation children.
+Playback descriptors are lower-level data definitions, so a playback type never
+needs to require its owning backend type aggregate.
+
+The root imports canonical leaves directly and selects the supported constructors
+and consumer types. It replaces the redundant inner value/type aggregates.
+Constructor exports contain `.new`, while instance methods stay on the constructed
+objects. Existing root calls and type names remain valid; internal paths and raw
+class-table access are not compatibility surfaces.
+
+This migration changes source ownership and exports only. Update ordering,
+request construction, backend reconciliation, marker behavior, and lifecycle
+semantics are unchanged. Controller decomposition and reusable evaluation output
+remain separate future work.
 
 ## Update transaction
 

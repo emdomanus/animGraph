@@ -1,9 +1,11 @@
 # Canonical Definitions
 
-Source: `src/animGraph/types/def/init.luau`
+Source: `src/animGraph/types/def/animation/shared/animation.luau`
 
-These definitions are declared once and re-exported through the package type
-barrels.
+These definitions are declared once and re-exported directly by the package
+root. Roblox playback descriptors (`AssetId`, `RobloxLayerBackend`, and
+`LogicalPriorityBand`) live in
+`src/animGraph/types/def/animationPlayback/shared/robloxPlayback.luau`.
 
 ## AnimationPosition
 
