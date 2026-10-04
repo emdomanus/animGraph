@@ -11,6 +11,7 @@ export type AnimationPosition = Types.AnimationPosition
 export type TimeSample = Types.TimeSample
 export type TimeReader = Types.TimeReader
 export type TrackCompletedEvent<LayerT, StateT> = Types.TrackCompletedEvent<LayerT, StateT>
+export type TrackMarkerSource<LayerT, StateT, ClipT> = Types.TrackMarkerSource<LayerT, StateT, ClipT>
 export type ParameterValue = Types.ParameterValue
 export type AnimationEventName = Types.AnimationEventName
 export type AnimationEvent<LayerT, StateT> = Types.AnimationEvent<LayerT, StateT>

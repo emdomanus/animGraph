@@ -61,3 +61,15 @@ export type Release = () -> ()
 ```
 
 Completion and controller-event bindings return idempotent release functions.
+
+## TrackMarkerSource
+
+`TrackMarkerSource<LayerT, StateT, ClipT>` is the backend-independent observation
+surface passed to `onMarker` callbacks. It exposes readonly methods
+`getTrackKey(): string`, `getGeneration(): number`, `getLayer(): LayerT`,
+`getState(): StateT?`, and `getClip(): ClipT`. The existing playback object implements
+this surface directly. It provides no playback mutations or Roblox instances.
+
+Specific-track callbacks receive only `value: string`; all-track callbacks receive
+`(track: TrackMarkerSource<LayerT, StateT, ClipT>, value: string)`. There is no marker
+event record type or per-event wrapper. Both subscription methods return `Release`.

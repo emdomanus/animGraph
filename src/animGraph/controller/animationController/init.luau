@@ -8,6 +8,8 @@ local LayerRuntime = require(script.Parent.Parent.runtime.layerRuntime)
 local ParameterStore = require(script.parameterStore)
 local RequestValidation = require(script.Parent.Parent.utils.requestValidation)
 local Types = require(script.Parent.Parent.types.controller.animationController)
+local TrackMarkerSourceTypes =
+	require(script.Parent.Parent.types.ports.backends.animationPlayback.shared.trackMarkerSource)
 local DefTypes = require(script.Parent.Parent.types.def)
 local EventBusTypes = require(script.Parent.Parent.types.controller.eventBus)
 local LayerRuntimeTypes = require(script.Parent.Parent.types.runtime.layerRuntime)
@@ -38,6 +40,7 @@ export type AnimationControllerImpl<LayerT, StateT, ParamT, ClipT, LayerBackendT
 	LayerBackendT
 >
 
+type TrackMarkerSource<LayerT, StateT, ClipT> = TrackMarkerSourceTypes.TrackMarkerSource<LayerT, StateT, ClipT>
 type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> = Types.GraphIntentCommand<
 	LayerT,
 	StateT,
@@ -704,6 +707,42 @@ function AnimationController.consumeTrigger<LayerT, StateT, ParamT, ClipT, Layer
 	parameter: ParamT
 ): boolean
 	return self._parameters:consumeTrigger(parameter)
+end
+
+function AnimationController.onMarker<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	markerName: string,
+	callback: (
+		track: TrackMarkerSource<LayerT, StateT, ClipT>,
+		value: string
+	) -> ()
+): DefTypes.Release
+	assert(not self._destroyed, "cannot subscribe to markers on a destroyed controller")
+	assert(self._backend:getCapabilities().trackMarkers, "backend does not support track markers")
+	return self._backend:bindToMarker(markerName, callback)
+end
+
+function AnimationController.onTrackMarker<LayerT, StateT, ParamT, ClipT, LayerBackendT>(
+	self: AnimationControllerImpl<
+		LayerT,
+		StateT,
+		ParamT,
+		ClipT,
+		LayerBackendT
+	>,
+	trackKey: string,
+	markerName: string,
+	callback: (value: string) -> ()
+): DefTypes.Release
+	assert(not self._destroyed, "cannot subscribe to markers on a destroyed controller")
+	assert(self._backend:getCapabilities().trackMarkers, "backend does not support track markers")
+	return self._backend:bindToTrackMarker(trackKey, markerName, callback)
 end
 
 function AnimationController.on<LayerT, StateT, ParamT, ClipT, LayerBackendT>(

@@ -2,6 +2,7 @@
 --!optimize 2
 --!native
 
+local TrackMarkerSourceTypes = require(script.ports.backends.animationPlayback.shared.trackMarkerSource)
 local AnimationControllerTypes = require(script.controller.animationController)
 local DefTypes = require(script.def)
 local EventBusTypes = require(script.controller.eventBus)
@@ -22,6 +23,7 @@ export type TimeSample = DefTypes.TimeSample
 export type TimeReader = DefTypes.TimeReader
 export type Release = DefTypes.Release
 export type TrackCompletedEvent<LayerT, StateT> = DefTypes.TrackCompletedEvent<LayerT, StateT>
+export type TrackMarkerSource<LayerT, StateT, ClipT> = TrackMarkerSourceTypes.TrackMarkerSource<LayerT, StateT, ClipT>
 
 export type ParameterValue = ParameterStoreTypes.ParameterValue
 export type ParameterStore<ParamT> = ParameterStoreTypes.ParameterStore<ParamT>

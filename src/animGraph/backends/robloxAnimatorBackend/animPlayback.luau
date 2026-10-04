@@ -11,78 +11,10 @@ local AnimationBackendTypes = require(script.Parent.Parent.Parent.types.backends
 type AnimationPosition = DefTypes.AnimationPosition
 type RobloxLayerBackend = RobloxAnimatorBackendTypes.RobloxLayerBackend
 
-export type AssetId = number
-export type PlaybackLifecycle = "active" | "retiring" | "completed" | "cleaned"
-
-export type AnimPlaybackConfig<ClipT> = {
-	trackKey: string,
-	clip: ClipT,
-	assetId: AssetId,
-	animator: Animator,
-	generation: number,
-	onStopped: (generation: number) -> (),
-	onEnded: (generation: number) -> (),
-}
-
-export type AnimPlayback<LayerT, StateT, ClipT> = {
-	start: (
-		self: AnimPlayback<LayerT, StateT, ClipT>,
-		sampleTime: number,
-		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
-		robloxPriority: Enum.AnimationPriority
-	) -> boolean,
-	apply: (
-		self: AnimPlayback<LayerT, StateT, ClipT>,
-		sampleTime: number,
-		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
-		robloxPriority: Enum.AnimationPriority
-	) -> boolean,
-	preflightApply: (
-		self: AnimPlayback<LayerT, StateT, ClipT>,
-		request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
-	) -> (),
-	setPosition: (self: AnimPlayback<LayerT, StateT, ClipT>, position: AnimationPosition) -> boolean,
-	offsetPosition: (self: AnimPlayback<LayerT, StateT, ClipT>, deltaSeconds: number) -> boolean,
-	latchNaturalCompletion: (self: AnimPlayback<LayerT, StateT, ClipT>) -> boolean,
-	retire: (self: AnimPlayback<LayerT, StateT, ClipT>, fadeTime: number) -> boolean,
-	cleanup: (self: AnimPlayback<LayerT, StateT, ClipT>) -> (),
-	getGeneration: (self: AnimPlayback<LayerT, StateT, ClipT>) -> number,
-	getTrackKey: (self: AnimPlayback<LayerT, StateT, ClipT>) -> string,
-	getClip: (self: AnimPlayback<LayerT, StateT, ClipT>) -> ClipT,
-	getLayer: (self: AnimPlayback<LayerT, StateT, ClipT>) -> LayerT,
-	getState: (self: AnimPlayback<LayerT, StateT, ClipT>) -> StateT?,
-	getLifecycle: (self: AnimPlayback<LayerT, StateT, ClipT>) -> PlaybackLifecycle,
-	isLooped: (self: AnimPlayback<LayerT, StateT, ClipT>) -> boolean,
-	isPlaying: (self: AnimPlayback<LayerT, StateT, ClipT>) -> boolean,
-	getWeight: (self: AnimPlayback<LayerT, StateT, ClipT>) -> number,
-	getSpeed: (self: AnimPlayback<LayerT, StateT, ClipT>) -> number,
-	getLogicalPriority: (self: AnimPlayback<LayerT, StateT, ClipT>) -> number,
-	getRobloxPriority: (self: AnimPlayback<LayerT, StateT, ClipT>) -> Enum.AnimationPriority,
-	getPositionMode: (self: AnimPlayback<LayerT, StateT, ClipT>) -> AnimationBackendTypes.BackendPositionMode,
-}
-
-export type AnimPlaybackImpl<LayerT, StateT, ClipT> = AnimPlayback<LayerT, StateT, ClipT> & {
-	_trackKey: string,
-	_clip: ClipT,
-	_generation: number,
-	_animation: Animation,
-	_track: AnimationTrack,
-	_stoppedConnection: RBXScriptConnection?,
-	_endedConnection: RBXScriptConnection?,
-	_layer: LayerT?,
-	_state: StateT?,
-	_weight: number,
-	_speed: number,
-	_timeRate: number,
-	_nativeSpeed: number,
-	_looped: boolean,
-	_logicalPriority: number,
-	_priority: Enum.AnimationPriority?,
-	_pendingPosition: AnimationPosition?,
-	_pendingOffsetSeconds: number?,
-	_pendingReverseStart: boolean,
-	_lifecycle: PlaybackLifecycle,
-}
+type PlaybackLifecycle = RobloxAnimatorBackendTypes.PlaybackLifecycle
+type AnimPlaybackConfig<ClipT> = RobloxAnimatorBackendTypes.AnimPlaybackConfig<ClipT>
+type AnimPlayback<LayerT, StateT, ClipT> = RobloxAnimatorBackendTypes.AnimPlayback<LayerT, StateT, ClipT>
+type AnimPlaybackImpl<LayerT, StateT, ClipT> = RobloxAnimatorBackendTypes.AnimPlaybackImpl<LayerT, StateT, ClipT>
 
 local AnimPlayback = {}
 AnimPlayback.__index = AnimPlayback
@@ -105,9 +37,7 @@ local function disconnect(connection: RBXScriptConnection?): ()
 	end
 end
 
-local function latchCompleted<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): boolean
+local function latchCompleted<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): boolean
 	if self._lifecycle ~= "active" or self._looped then
 		return false
 	end
@@ -125,18 +55,14 @@ local function desiredNativeSpeed<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<
 	return self._speed * self._timeRate
 end
 
-local function requiresPendingReverseHold<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): boolean
+local function requiresPendingReverseHold<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): boolean
 	return (self._pendingPosition ~= nil or self._pendingOffsetSeconds ~= nil)
 		and not self._looped
 		and desiredNativeSpeed(self) < 0
 		and self._track.Length <= 0
 end
 
-local function resolvePendingAddress<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): boolean
+local function resolvePendingAddress<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): boolean
 	local pendingPosition = self._pendingPosition
 	local pendingOffsetSeconds = self._pendingOffsetSeconds
 	if (pendingPosition == nil and pendingOffsetSeconds == nil) or self._lifecycle ~= "active" then
@@ -158,13 +84,8 @@ local function resolvePendingAddress<LayerT, StateT, ClipT>(
 		completed = false
 	end
 	if pendingOffsetSeconds ~= nil then
-		resolvedSeconds, completed = AnimationPosition.resolveOffset(
-			resolvedSeconds,
-			pendingOffsetSeconds,
-			length,
-			self._looped,
-			desiredSpeed
-		)
+		resolvedSeconds, completed =
+			AnimationPosition.resolveOffset(resolvedSeconds, pendingOffsetSeconds, length, self._looped, desiredSpeed)
 	end
 	self._pendingPosition = nil
 	self._pendingOffsetSeconds = nil
@@ -182,9 +103,7 @@ local function resolvePendingAddress<LayerT, StateT, ClipT>(
 	return completed
 end
 
-function AnimPlayback.new<LayerT, StateT, ClipT>(
-	config: AnimPlaybackConfig<ClipT>
-): AnimPlayback<LayerT, StateT, ClipT>
+function AnimPlayback.new<LayerT, StateT, ClipT>(config: AnimPlaybackConfig<ClipT>): AnimPlayback<LayerT, StateT, ClipT>
 	local animation = Instance.new("Animation")
 	animation.AnimationId = "rbxassetid://" .. tostring(config.assetId)
 
@@ -219,10 +138,26 @@ function AnimPlayback.new<LayerT, StateT, ClipT>(
 	return self
 end
 
+function AnimPlayback.bindToMarker<LayerT, StateT, ClipT>(
+	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
+	markerName: string,
+	callback: (value: string) -> ()
+): DefTypes.Release
+	local connection = self._track:GetMarkerReachedSignal(markerName):Connect(callback)
+	return function()
+		connection:Disconnect()
+	end
+end
+
 function AnimPlayback.start<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
 	_sampleTime: number,
-	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
+	request: MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		RobloxLayerBackend
+	>,
 	robloxPriority: Enum.AnimationPriority
 ): boolean
 	assert(self._lifecycle == "active", "cannot start an inactive playback generation")
@@ -252,14 +187,24 @@ end
 
 function AnimPlayback.preflightApply<LayerT, StateT, ClipT>(
 	_self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
-	_request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>
+	_request: MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		RobloxLayerBackend
+	>
 ): ()
 end
 
 function AnimPlayback.apply<LayerT, StateT, ClipT>(
 	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
 	_sampleTime: number,
-	request: MotionNodeTypes.ClipRequest<LayerT, StateT, ClipT, RobloxLayerBackend>,
+	request: MotionNodeTypes.ClipRequest<
+		LayerT,
+		StateT,
+		ClipT,
+		RobloxLayerBackend
+	>,
 	robloxPriority: Enum.AnimationPriority
 ): boolean
 	if self._lifecycle ~= "active" then
@@ -318,10 +263,7 @@ function AnimPlayback.apply<LayerT, StateT, ClipT>(
 	return false
 end
 
-function AnimPlayback.setPosition<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
-	position: AnimationPosition
-): boolean
+function AnimPlayback.setPosition<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>, position: AnimationPosition): boolean
 	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
 	self._pendingOffsetSeconds = nil
 	self._pendingPosition = copyPosition(position)
@@ -335,10 +277,7 @@ function AnimPlayback.setPosition<LayerT, StateT, ClipT>(
 	return resolvePendingAddress(self)
 end
 
-function AnimPlayback.offsetPosition<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
-	deltaSeconds: number
-): boolean
+function AnimPlayback.offsetPosition<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>, deltaSeconds: number): boolean
 	assert(self._lifecycle == "active", "cannot position an inactive playback generation")
 	AnimationPosition.assertFiniteSeconds(deltaSeconds, "deltaSeconds")
 	local pendingOffsetSeconds = self._pendingOffsetSeconds
@@ -357,16 +296,11 @@ function AnimPlayback.offsetPosition<LayerT, StateT, ClipT>(
 	return resolvePendingAddress(self)
 end
 
-function AnimPlayback.latchNaturalCompletion<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): boolean
+function AnimPlayback.latchNaturalCompletion<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): boolean
 	return latchCompleted(self)
 end
 
-function AnimPlayback.retire<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>,
-	fadeTime: number
-): boolean
+function AnimPlayback.retire<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>, fadeTime: number): boolean
 	if self._lifecycle == "cleaned" then
 		return true
 	end
@@ -394,9 +328,7 @@ function AnimPlayback.retire<LayerT, StateT, ClipT>(
 	return fadeTime <= 0 or not wasPlaying
 end
 
-function AnimPlayback.cleanup<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): ()
+function AnimPlayback.cleanup<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): ()
 	if self._lifecycle == "cleaned" then
 		return
 	end
@@ -435,9 +367,7 @@ function AnimPlayback.getState<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<Lay
 	return self._state
 end
 
-function AnimPlayback.getLifecycle<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): PlaybackLifecycle
+function AnimPlayback.getLifecycle<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): PlaybackLifecycle
 	return self._lifecycle
 end
 
@@ -457,15 +387,11 @@ function AnimPlayback.getSpeed<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<Lay
 	return self._speed
 end
 
-function AnimPlayback.getLogicalPriority<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): number
+function AnimPlayback.getLogicalPriority<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): number
 	return self._logicalPriority
 end
 
-function AnimPlayback.getRobloxPriority<LayerT, StateT, ClipT>(
-	self: AnimPlaybackImpl<LayerT, StateT, ClipT>
-): Enum.AnimationPriority
+function AnimPlayback.getRobloxPriority<LayerT, StateT, ClipT>(self: AnimPlaybackImpl<LayerT, StateT, ClipT>): Enum.AnimationPriority
 	local priority = self._priority
 	assert(priority ~= nil, "playback generation has not started")
 	return priority

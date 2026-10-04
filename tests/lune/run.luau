@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local requireAny = require :: any
 local process = requireAny("@lune/process")
@@ -6,6 +7,7 @@ local process = requireAny("@lune/process")
 local suites = {
 	process.cwd .. "/tests/lune/smoke.spec.luau",
 	process.cwd .. "/tests/lune/controller.spec.luau",
+	process.cwd .. "/tests/lune/trackMarkers.spec.luau",
 	process.cwd .. "/tests/lune/evaluationReuse.spec.luau",
 	process.cwd .. "/tests/lune/robloxAnimatorBackend.spec.luau",
 	process.cwd .. "/tests/lune/sampledRobloxAnimatorBackend.spec.luau",

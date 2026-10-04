@@ -3,7 +3,6 @@
 --!native
 
 local AnimationPosition = require(script.Parent.Parent.Parent.utils.animationPosition)
-local NativeAnimPlayback = require(script.Parent.animPlayback)
 local DefTypes = require(script.Parent.Parent.Parent.types.def)
 local MotionNodeTypes = require(script.Parent.Parent.Parent.types.motions.motionNode)
 local RobloxAnimatorBackendTypes = require(script.Parent.Parent.Parent.types.backends.robloxAnimatorBackend)
@@ -11,31 +10,13 @@ local AnimationBackendTypes = require(script.Parent.Parent.Parent.types.backends
 
 type AnimationPosition = DefTypes.AnimationPosition
 type RobloxLayerBackend = RobloxAnimatorBackendTypes.RobloxLayerBackend
-type PlaybackLifecycle = NativeAnimPlayback.PlaybackLifecycle
+type PlaybackLifecycle = RobloxAnimatorBackendTypes.PlaybackLifecycle
 
-export type SampledAnimPlaybackImpl<LayerT, StateT, ClipT> = NativeAnimPlayback.AnimPlayback<LayerT, StateT, ClipT> & {
-	_trackKey: string,
-	_clip: ClipT,
-	_generation: number,
-	_animation: Animation,
-	_track: AnimationTrack,
-	_stoppedConnection: RBXScriptConnection?,
-	_endedConnection: RBXScriptConnection?,
-	_layer: LayerT?,
-	_state: StateT?,
-	_weight: number,
-	_speed: number,
-	_timeRate: number,
-	_looped: boolean,
-	_logicalPriority: number,
-	_priority: Enum.AnimationPriority?,
-	_pendingPosition: AnimationPosition?,
-	_pendingOffsetSeconds: number,
-	_positionAnchor: number?,
-	_timePositionAnchor: number,
-	_lastTimePosition: number?,
-	_lifecycle: PlaybackLifecycle,
-}
+type SampledAnimPlaybackImpl<LayerT, StateT, ClipT> = RobloxAnimatorBackendTypes.SampledAnimPlaybackImpl<
+	LayerT,
+	StateT,
+	ClipT
+>
 
 local SampledAnimPlayback = {}
 SampledAnimPlayback.__index = SampledAnimPlayback
@@ -169,8 +150,8 @@ local function ensurePlaying<LayerT, StateT, ClipT>(self: SampledAnimPlaybackImp
 end
 
 function SampledAnimPlayback.new<LayerT, StateT, ClipT>(
-	config: NativeAnimPlayback.AnimPlaybackConfig<ClipT>
-): NativeAnimPlayback.AnimPlayback<LayerT, StateT, ClipT>
+	config: RobloxAnimatorBackendTypes.AnimPlaybackConfig<ClipT>
+): RobloxAnimatorBackendTypes.AnimPlayback<LayerT, StateT, ClipT>
 	local animation = Instance.new("Animation")
 	animation.AnimationId = "rbxassetid://" .. tostring(config.assetId)
 
@@ -204,6 +185,14 @@ function SampledAnimPlayback.new<LayerT, StateT, ClipT>(
 	end)
 
 	return self
+end
+
+function SampledAnimPlayback.bindToMarker<LayerT, StateT, ClipT>(
+	_self: SampledAnimPlaybackImpl<LayerT, StateT, ClipT>,
+	_markerName: string,
+	_callback: (value: string) -> ()
+): DefTypes.Release
+	error("sampledPosition does not support track markers", 2)
 end
 
 function SampledAnimPlayback.start<LayerT, StateT, ClipT>(

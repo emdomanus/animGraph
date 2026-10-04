@@ -142,6 +142,8 @@ immediate lifecycle boundaries.
 - `setTrackPosition(trackKey, position) -> boolean`
 - `offsetTrackPosition(trackKey, deltaSeconds) -> boolean`
 - `on(eventName, callback) -> release`
+- `onTrackMarker(trackKey, markerName, callback) -> release`
+- `onMarker(markerName, callback) -> release`
 - `update(sampleTime)`
 - `getDebugSnapshot()`
 - `clear()`
@@ -169,3 +171,76 @@ the request's last accepted time position.
 
 Subscribe to `trackCompleted` through `on`. Completion is committed before
 dispatch and listener iteration is snapshot-safe.
+
+## Track markers
+
+```luau
+-- Observe a named marker on every current and future track in this controller.
+local releaseAll = controller:onMarker("Footstep", function(track, value: string)
+    print(track:getTrackKey(), track:getLayer(), track:getState(), value)
+end)
+
+-- Observe just one logical track; its callback receives only the parameter string.
+local releaseTrack = controller:onTrackMarker("locomotion/walk", "Footstep", function(value: string)
+    print(value)
+end)
+local walk = AnimGraph.clipNode.new("walk", { trackKey = "locomotion/walk", looped = true })
+controller:play("base", walk)
+-- Call releaseAll() / releaseTrack() when the respective observer is no longer needed.
+```
+
+`onMarker` automatically observes the specified name on tracks already active and
+tracks materialized later. This is all tracks owned by this controller's backend,
+not every Animator in the game, and it does not discover arbitrary marker names.
+A track without the specified marker simply produces no matching notification.
+
+The controller delegates both operations through the backend contract. Check
+`backend:getCapabilities().trackMarkers`: Roblox `nativeRate` supports them;
+`sampledPosition` rejects both with an error. Marker subscriptions are separate
+from `on`, which observes graph events and track completion. The parameter is a
+single string, matching Roblox's marker value. Legacy named-keyframe events are
+not included.
+
+The all-track callback receives `(track, value)`. `track` has the readonly
+`TrackMarkerSource<LayerT, StateT, ClipT>` surface: `getTrackKey()`,
+`getGeneration()`, `getLayer()`, `getState()`, and `getClip()`. It is the existing
+AnimGraph playback object with an observation-only type, not a Roblox
+AnimationTrack, a newly allocated wrapper, or a mutable playback command handle.
+Repeated markers from one generation provide the same object; replacement creates
+a different object. A retained old source never retargets to the new generation.
+Its layer/state getters reflect the playback's latest applied context, not an
+immutable snapshot from the instant a marker was queued. Its identity getters
+remain readable after retirement. Generations are unique within one backend's
+lifetime, not globally.
+
+Both subscriptions may be registered before or after materialization. They
+survive `clear()` and stop/play. A specific subscription follows its logical key
+across restarts and replacement clips. Subscriptions end on release or controller
+destruction. Release is idempotent, including after destruction; registration on a
+destroyed controller is an error. Use distinct track keys for distinct occurrences,
+including the same asset on two layers.
+
+Only active generations emit. Retirement/completion disconnects physical signals
+and invalidates queued callbacks from that generation. Continuous native playback
+forwards each engine notification, including repeated markers on successive loops.
+Explicit seeks do not synthesize skipped events. No clip metadata is downloaded.
+
+Callbacks wait for an in-progress backend apply to finish. For each event, specific
+observers run before all-track observers, in registration order within each group.
+Both groups' iteration bounds are captured before delivery: listeners added during
+a callback start with a subsequent event; released listeners are skipped. Clearing,
+destroying, retiring, or replacing the source cancels its remaining delivery.
+Recursive signals queue until the current dispatch finishes. Callback errors
+propagate after dispatch state is restored, and queued marker events are discarded.
+Graph commands from callbacks still take effect on the next controller update.
+
+Global and specific observers share one native signal connection per active
+track/marker pair. Dispatch uses existing playback references and string parameters
+in reusable queue arrays; it creates no event records, queue records, track wrappers,
+or listener snapshots. Arrays may grow with demand, and subscription/materialization
+still allocates storage and connections. This is not a claim that Roblox's signal
+machinery or consumer callbacks allocate nothing.
+
+Each actively blended track may notify independently, even at zero weight. There
+is no dominant-track selection, weight threshold, or footstep deduplication; that
+policy belongs to the consumer.

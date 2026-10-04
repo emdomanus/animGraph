@@ -3,6 +3,7 @@
 --!native
 
 local BackendTypes = require(script.Parent.Parent.backends.animationBackend)
+local TrackMarkerSourceTypes = require(script.Parent.Parent.ports.backends.animationPlayback.shared.trackMarkerSource)
 local DefTypes = require(script.Parent.Parent.def)
 local EventBusTypes = require(script.Parent.eventBus)
 local LayerRuntimeTypes = require(script.Parent.Parent.runtime.layerRuntime)
@@ -68,6 +69,17 @@ export type GraphIntentCommand<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
 }
 
 export type AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT> = {
+	read onMarker: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		markerName: string,
+		callback: (track: TrackMarkerSourceTypes.TrackMarkerSource<LayerT, StateT, ClipT>, value: string) -> ()
+	) -> DefTypes.Release,
+	read onTrackMarker: (
+		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
+		trackKey: string,
+		markerName: string,
+		callback: (value: string) -> ()
+	) -> DefTypes.Release,
 	read addLayer: (
 		self: AnimationController<LayerT, StateT, ParamT, ClipT, LayerBackendT>,
 		definition: LayerRuntimeTypes.LayerDefinition<LayerT, LayerBackendT>

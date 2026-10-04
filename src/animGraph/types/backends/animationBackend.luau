@@ -3,12 +3,14 @@
 --!native
 
 local MotionNodeTypes = require(script.Parent.Parent.motions.motionNode)
+local TrackMarkerSourceTypes = require(script.Parent.Parent.ports.backends.animationPlayback.shared.trackMarkerSource)
 local DefTypes = require(script.Parent.Parent.def)
 
 export type PerJointFallbackMode = "full" | "priorityTier" | "none"
 export type BackendPositionMode = "nativeRate" | "sampledPosition"
 
 export type BackendCapabilities = {
+	trackMarkers: boolean,
 	positionMode: BackendPositionMode,
 	unlimitedPriority: boolean,
 	perJointFallback: PerJointFallbackMode,
@@ -35,6 +37,17 @@ export type BackendDebugSnapshot = {
 }
 
 export type AnimationBackend<LayerT, StateT, ClipT, LayerBackendT> = {
+	read bindToMarker: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		markerName: string,
+		callback: (track: TrackMarkerSourceTypes.TrackMarkerSource<LayerT, StateT, ClipT>, value: string) -> ()
+	) -> DefTypes.Release,
+	read bindToTrackMarker: (
+		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
+		trackKey: string,
+		markerName: string,
+		callback: (value: string) -> ()
+	) -> DefTypes.Release,
 	read apply: (
 		self: AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>,
 		sampleTime: number,

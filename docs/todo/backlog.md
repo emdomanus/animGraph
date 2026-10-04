@@ -13,8 +13,10 @@ These items are outside the implemented absolute-time library contract.
 ## Consumer Driven
 
 - VoxelMMO adapter and timing-binding composition in the consumer repository.
-- Marker/keyframe forwarding after a concrete consumer defines subscription and
-  position-crossing semantics.
+- Sampled-position marker metadata and crossing evaluation, including loop,
+  reverse, and explicit-seek semantics. Native marker subscriptions are implemented;
+  real Studio acceptance remains pending (VMMO-43).
+- Consumer marker arbitration for blended footsteps, coordinated with VMMO-26.
 - Optional layer stack behavior only after repeated consumer use proves a
   package-generic contract.
 
