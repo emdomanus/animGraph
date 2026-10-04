@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 -- selene: allow(incorrect_standard_library_use)
 local AnimGraph = require("../../src")
 type Layer = "body"
@@ -11,6 +12,9 @@ local function reject(
 	controller: Controller,
 	wrongMotion: AnimGraph.MotionNode<Layer, State, Param, "otherClip", AnimGraph.RobloxLayerBackend>
 )
+	local rawUpdate = AnimGraph.animationController.update -- EXPECT_ERROR
+	local rawApply = AnimGraph.robloxAnimatorBackend.apply -- EXPECT_ERROR
+	print(rawUpdate, rawApply)
 	controller:setLayerWeight("unknownLayer", 1) -- EXPECT_ERROR
 	controller:setFloat("unknownParameter", 1) -- EXPECT_ERROR
 	controller:play("body" :: Layer, wrongMotion) -- EXPECT_ERROR
@@ -20,6 +24,16 @@ local function reject(
 	local wrongLayer: "unknownLayer" = snapshot.layers[1].id -- EXPECT_ERROR
 	local wrongState: "unknownState" = snapshot.layers[1].state -- EXPECT_ERROR
 	local wrongValue: Vector3 = snapshot.parameters["speed" :: Param] -- EXPECT_ERROR
+	controller:onTrackMarker("track", "Cue", function(value)
+		local wrongMarkerValue: number = value -- EXPECT_ERROR
+		print(wrongMarkerValue)
+	end)
+	controller:onMarker("Cue", function(track, value)
+		local wrongMarkerLayer: "other" = track:getLayer() -- EXPECT_ERROR
+		local wrongMarkerClip: "otherClip" = track:getClip() -- EXPECT_ERROR
+		track.getLayer = track.getLayer -- EXPECT_ERROR
+		print(wrongMarkerLayer, wrongMarkerClip, value)
+	end)
 	controller:update("now") -- EXPECT_ERROR
 	controller.update = controller.update -- EXPECT_ERROR
 	local position: AnimGraph.AnimationPosition = { kind = "frames", value = 1 } -- EXPECT_ERROR
@@ -41,7 +55,7 @@ local function rejectDefaults(
 	local controller = AnimGraph.new(config)
 	controller:setFloat("unknownParameter", 1) -- EXPECT_ERROR
 	local defaults = config.parameterDefaults
-	assert(defaults ~= nil)
+	assert(defaults ~= nil, "defaults are present in this fixture")
 	defaults["speed" :: Param] = Vector3.new() -- EXPECT_ERROR
 	defaults["unknownParameter"] = 0 -- EXPECT_ERROR
 end

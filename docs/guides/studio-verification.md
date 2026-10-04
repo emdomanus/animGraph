@@ -214,3 +214,33 @@ operator record above.
 This page records engine evidence; it does not turn deferred marker forwarding,
 continuous reverse graph traversal, package publication, or VoxelMMO consumer
 work into AnimGraph implementation scope.
+
+## Native marker subscriptions — VMMO-43 (pending)
+
+Lune coverage exercises controller/backend/playback wiring against fake engine
+signals. It does not prove real engine marker timing.
+
+1. Use an accessible animation with named `Footstep` markers and string payloads.
+   Register `onTrackMarker(trackKey, "Footstep", callback)` before and after play.
+   Verify the callback receives exactly one string argument, including empty values.
+2. Register `onMarker("Footstep", callback)` before play and with tracks already
+   active. Verify it receives `(track, value)` for existing and future tracks,
+   and inspect the source's key, generation, layer, state, and clip getters.
+3. Play continuously through multiple loops. Check repeated events pass the same
+   source object. Play the same asset on two layers with distinct keys; their
+   sources must differ. Register specific and global observers together and
+   verify releasing either leaves the other functional.
+4. Restart/replace, stop with a fade, complete, clear, and destroy. Check old
+   generations never deliver afterward, replacement sources are distinct, clear
+   retains subscriptions, and release stays safe after destruction. Include a
+   marker at the final frame to record engine ordering relative to completion.
+5. Seek forward/backward across markers: no synthetic event should be emitted.
+   Resume playback and verify subsequent native crossings notify.
+6. From callbacks, unsubscribe, add observers, clear/destroy, or restart the
+   controller. Verify no stale remaining delivery or leaked connections, and
+   graph play/stop commands still follow next-update semantics.
+7. Sampled mode must report false and reject both subscription APIs, while
+   ordinary sampled playback continues to work.
+
+Status: not executed in Studio for this checkpoint. Earlier seek experiments are
+supporting design evidence, not acceptance of the new subscription API.

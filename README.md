@@ -28,6 +28,11 @@ pesde install
 
 The package entry point is `src/init.luau`.
 
+Require that entrypoint for the supported constructors and types. Implementation
+and type owners declare `shared` execution domains beneath `src/animGraph`;
+internal paths are not stable consumer imports. Named constructor modules expose
+`.new`, and instance methods are called on their constructed objects.
+
 ## Example
 
 ```luau

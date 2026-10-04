@@ -1,6 +1,6 @@
 # ClipNode
 
-Source: `src/animGraph/motions/clipNode/init.luau`
+Source: `src/animGraph/motions/clipNode/shared/clipNode.luau`
 
 Create with `AnimGraph.clip(clip, config?)` or `AnimGraph.clipNode.new`.
 

@@ -1,6 +1,6 @@
 # StateMachineRuntime
 
-Source: `src/animGraph/runtime/stateMachineRuntime/init.luau`
+Source: `src/animGraph/runtime/stateMachineRuntime/shared/stateMachineRuntime.luau`
 
 Create with `AnimGraph.stateMachine(config)` or
 `AnimGraph.stateMachineRuntime.new(config)`. The runtime is a stateful motion

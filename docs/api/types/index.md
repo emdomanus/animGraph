@@ -1,8 +1,9 @@
 # Public Type Index
 
-The package root `src/init.luau` re-exports public types from
-`src/animGraph/types/init.luau`. Consumers should name types through the package
-namespace instead of requiring implementation modules.
+The package root `src/init.luau` re-exports public types directly from their
+canonical owners beneath `src/animGraph/types`. Consumers should name types
+through the package namespace instead of requiring implementation modules.
+Each canonical type owner declares its `shared` execution domain.
 
 ## Shared Definitions
 
@@ -45,8 +46,9 @@ consumer aliases, constructor specialization, and migration notes.
 - `Blend2DNode<LayerT, StateT, ParamT, ClipT, LayerBackendT>`
 
 `MotionEvaluateContext`, implementation shapes, and layer/debug helper types are
-available from the internal type barrel for package implementation, but are not
-re-exported as root consumer types.
+imported from their exact canonical leaves by package implementation. There is
+no internal aggregate type barrel. These helpers are not re-exported as root
+consumer types.
 
 ## State Machines
 
@@ -59,6 +61,7 @@ re-exported as root consumer types.
 
 ## Backends
 
+- `TrackMarkerSource<LayerT, StateT, ClipT>`
 - `AnimationBackend<LayerT, StateT, ClipT, LayerBackendT>`
 - `BackendPositionMode`
 - `BackendCapabilities`

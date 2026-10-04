@@ -1,6 +1,6 @@
 # StackModifier
 
-Source: `src/animGraph/components/stackModifier/init.luau`
+Source: `src/animGraph/components/stackModifier/shared/stackModifier.luau`
 
 Construct with `AnimGraph.stackModifier.new(config?)`. It is a small reusable
 numeric modifier stack that returns release callbacks for pushed entries. It

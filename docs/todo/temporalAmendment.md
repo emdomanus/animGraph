@@ -171,15 +171,15 @@ behaviors under per-update `TimePosition` writes.
 
 | Concern | Main files |
 | --- | --- |
-| Canonical time types and barrels | `src/animGraph/types/def/init.luau`, `src/animGraph/types/init.luau`, package barrels |
-| Reader resolution and transaction | `src/animGraph/controller/animationController/init.luau` |
-| Layer propagation | `src/animGraph/runtime/layerRuntime/init.luau` |
-| Motion/request contract | `src/animGraph/types/motions/motionNode.luau`, `src/animGraph/motions/clipNode/init.luau` |
-| Forward-only transitions | `src/animGraph/runtime/transitionRuntime/init.luau`, `stateMachineRuntime/init.luau` |
-| Request validation | `src/animGraph/utils/requestValidation.luau` |
-| Native strategy | `src/animGraph/backends/robloxAnimatorBackend/animPlayback.luau` |
-| Sampled strategy | `src/animGraph/backends/robloxAnimatorBackend/sampledAnimPlayback.luau` |
-| Shared backend lifecycle | `src/animGraph/backends/robloxAnimatorBackend/init.luau` |
+| Canonical time types and package exports | `src/animGraph/types/def/animation/shared/animation.luau`, `src/init.luau` |
+| Reader resolution and transaction | `src/animGraph/controller/animationController/shared/animationController/init.luau` |
+| Layer propagation | `src/animGraph/runtime/layerRuntime/shared/layerRuntime.luau` |
+| Motion/request contract | `src/animGraph/types/motions/motionNode/shared/motionNode.luau`, `src/animGraph/motions/clipNode/shared/clipNode.luau` |
+| Forward-only transitions | `src/animGraph/runtime/transitionRuntime/shared/transitionRuntime.luau`, `src/animGraph/runtime/stateMachineRuntime/shared/stateMachineRuntime.luau` |
+| Request validation | `src/animGraph/utils/requestValidation/shared/requestValidation.luau` |
+| Native strategy | `src/animGraph/backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/animPlayback.luau` |
+| Sampled strategy | `src/animGraph/backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/sampledAnimPlayback.luau` |
+| Shared backend lifecycle | `src/animGraph/backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/init.luau` |
 
 ## Deterministic proofs
 

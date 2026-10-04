@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 -- selene: allow(incorrect_standard_library_use)
 local AnimGraph = require("../../src")
 type Layer = "body"
@@ -60,6 +61,19 @@ local function check(controller: Controller, reader: AnimGraph.TimeReader)
 	controller:setLayerTimeReader("body" :: Layer, reader)
 	controller:setFloat("speed" :: Param, 1)
 	controller:setTrackPosition("track", { kind = "normalized", value = 0.5 } :: AnimGraph.AnimationPosition)
+	local release = controller:onTrackMarker("track", "Footstep", function(value: string)
+		print(value)
+	end)
+	local releaseAll = controller:onMarker("Footstep", function(track, value)
+		local source: AnimGraph.TrackMarkerSource<Layer, State, Clip> = track
+		local markerLayer: Layer = source:getLayer()
+		local markerState: State? = source:getState()
+		local markerClip: Clip = source:getClip()
+		local parameter: string = value
+		print(markerLayer, markerState, markerClip, parameter, source:getGeneration(), source:getTrackKey())
+	end)
+	release()
+	releaseAll()
 	controller:update(10)
 	local snapshot: DebugSnapshot = controller:getDebugSnapshot()
 	local layer: Layer = snapshot.layers[1].id

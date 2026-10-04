@@ -1,6 +1,6 @@
 # RobloxAnimatorBackend
 
-Source: `src/animGraph/backends/robloxAnimatorBackend/init.luau`
+Source: `src/animGraph/backends/robloxAnimatorBackend/shared/robloxAnimatorBackend/init.luau`
 
 ```luau
 local backend = AnimGraph.robloxAnimatorBackend.new({
@@ -18,7 +18,7 @@ is fixed for the backend's lifetime and is reported by
 `getCapabilities().positionMode`.
 
 The backend implements `apply(sampleTime, requests)`, synchronous absolute and
-relative positioning, completion binding, layer stop, clear/destroy, capability
+relative positioning, completion and marker binding, layer stop, clear/destroy, capability
 reporting, and debug snapshots.
 
 ## Coordinate and batch contract
@@ -147,3 +147,31 @@ invalidates that materialization before an `AnimationTrack` is loaded.
 
 Debug track details include `positionMode`, `generation`, `lifecycle`, and
 `physicalPresent` without exposing raw Roblox objects.
+
+## Marker capability
+
+`getCapabilities().trackMarkers` is `true` for `nativeRate` and `false` for
+`sampledPosition`. Both operations return idempotent release functions:
+
+- `bindToTrackMarker(trackKey, markerName, callback)` calls `callback(value: string)`.
+- `bindToMarker(markerName, callback)` calls `callback(track, value: string)` for
+  the named marker on any current or future active track owned by this backend.
+
+`track` is the existing playback object observed through the backend-independent
+`TrackMarkerSource<LayerT, StateT, ClipT>` contract. Both scopes share one
+`GetMarkerReachedSignal(markerName)` connection per observed track/marker pair.
+They do not fetch keyframes or marker metadata. Sampled mode rejects both.
+
+Logical subscriptions survive `clear()`; physical connections do not. Final
+`destroy()` removes subscriptions and connections. Retirement disconnects marker
+signals immediately, even while Roblox continues a visual fade. Stale physical
+bindings and queued callbacks are invalidated. See the controller's
+[marker contract](../controllers/animationController.md#track-markers) for callback
+ordering, source lifetime, positioning, blending, and error semantics.
+
+Custom backends must provide `BackendCapabilities.trackMarkers`, `bindToTrackMarker`,
+and `bindToMarker`. Unsupported backends report `false` and reject either direct
+binding operation. Supporting backends provide an observation surface over their
+own track objects and the same subscription/lifecycle semantics. Neither the API
+nor `TrackMarkerSource` depends on Roblox instances. No sampled crossing evaluator
+is introduced here.

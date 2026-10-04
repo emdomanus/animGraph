@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local FakeRoblox = {}
 
@@ -46,6 +47,15 @@ local function newSignal(): any
 		end
 	end
 
+	function signal:capture(): (...any) -> ()
+		local captured = table.clone(listeners)
+		return function(...)
+			for _, callback in captured do
+				callback(...)
+			end
+		end
+	end
+
 	function signal:getConnectionCount(): number
 		return #listeners
 	end
@@ -90,6 +100,7 @@ function FakeRoblox.newTrack(length: number?): any
 		Priority = nil,
 		Stopped = newSignal(),
 		Ended = newSignal(),
+		markerSignals = {},
 	}
 	local calls = {
 		play = 0,
@@ -137,6 +148,15 @@ function FakeRoblox.newTrack(length: number?): any
 					fields.IsPlaying = false
 					fields.Ended:Fire()
 				end
+			elseif key == "GetMarkerReachedSignal" then
+				return function(_, markerName: string)
+					local signal = fields.markerSignals[markerName]
+					if signal == nil then
+						signal = newSignal()
+						fields.markerSignals[markerName] = signal
+					end
+					return signal
+				end
 			elseif key == "Play" then
 				return function(_, _fadeTime: number, _weight: number, speed: number)
 					calls.play += 1
@@ -144,6 +164,9 @@ function FakeRoblox.newTrack(length: number?): any
 					calls.order[#calls.order + 1] = { operation = "Play", value = speed }
 					fields.IsPlaying = true
 					fields.TimePosition = 0
+					if fields.onPlay ~= nil then
+						fields.onPlay()
+					end
 				end
 			elseif key == "AdjustWeight" then
 				return function(_, weight: number, fadeTime: number)

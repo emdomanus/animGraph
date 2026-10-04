@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local requireAny = require :: any
 local process = requireAny("@lune/process")
@@ -19,7 +20,9 @@ type StateEnteredEvent = {
 }
 
 local ok, result = pcall(function(): ()
-	local EventBus = transformed.requireModule("animGraph/controller/animationController/eventBus.luau") :: any
+	local EventBus = transformed.requireModule(
+		"animGraph/controller/animationController/shared/animationController/eventBus.luau"
+	) :: any
 	local eventBus = EventBus.new()
 	local observedState = nil
 	local release = eventBus:on("stateEntered", function(event)

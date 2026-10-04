@@ -1,10 +1,20 @@
 # API
 
-The public API tree mirrors the value modules under `src/animGraph`. Require
-the package root; the root re-exports the constructors and public types listed
+The public API groups the value modules under `src/animGraph` by responsibility.
+Require the package root; it exports the constructors and public types listed
 here. Private helpers such as `ParameterStore`, `EventBus`, `LayerRuntime`,
 and `AnimPlayback` remain implementation details and have no public reference
 page.
+
+`src/init.luau` is the sole package aggregate. Implementation and canonical type
+leaves declare `shared` at their owner boundary. Internal deep-require paths
+changed during the conventions migration; there are no old-path forwarding
+modules. Public root constructor names and type names are unchanged.
+
+The named constructor modules expose `.new`; they do not expose instance
+methods or private metatable methods. Call methods on the constructed object,
+for example `controller:update(sampleTime)`, rather than on
+`AnimGraph.animationController`.
 
 ```luau
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

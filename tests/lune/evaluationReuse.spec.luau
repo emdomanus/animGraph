@@ -1,4 +1,5 @@
 --!strict
+--!optimize 2
 
 local requireAny = require :: any
 local process = requireAny("@lune/process")
@@ -14,8 +15,9 @@ local transformed = ModuleLoader.write({
 })
 
 local ok, result = pcall(function(): number
-	local AnimGraph = transformed.requireModule("animGraph/init.luau") :: any
-	local RequestValidation = transformed.requireModule("animGraph/utils/requestValidation.luau") :: any
+	local AnimGraph = transformed.requireModule("init.luau") :: any
+	local RequestValidation =
+		transformed.requireModule("animGraph/utils/requestValidation/shared/requestValidation.luau") :: any
 	local count = 0
 	local function test(name: string, callback: () -> ()): ()
 		callback()
